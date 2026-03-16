@@ -11,14 +11,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.activity.ComponentActivity
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
+import com.example.delivery.auth.AuthManager
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun SettingsScreen(navController: NavController) {
+fun SettingsScreen(navController: NavController, authManager: AuthManager) {
+    
+    // Collect logout progress state
+    val logoutInProgress by authManager.logoutInProgress.collectAsState()
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -51,38 +58,6 @@ fun SettingsScreen(navController: NavController) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Compte",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-                        
-                        SettingsItemRow(
-                            title = "Modifier le profil",
-                            subtitle = "Mettre à jour vos informations",
-                            icon = Icons.Default.Edit,
-                            onClick = { navController.navigate(Screen.Profile.route) }
-                        )
-                        
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        
-                        SettingsItemRow(
-                            title = "Changer le mot de passe",
-                            subtitle = "Sécuriser votre compte",
-                            icon = Icons.Default.Lock,
-                            onClick = { /* TODO */ }
-                        )
-                    }
-                }
-            }
-            
             items(settingsItems) { item ->
                 SettingsCard(item = item, navController = navController)
             }
@@ -100,11 +75,13 @@ fun SettingsScreen(navController: NavController) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp)
-                            .clickable { 
-                                // Déconnexion et retour à la page de login
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(Screen.Home.route) { inclusive = true }
-                                    launchSingleTop = true
+                            .clickable(enabled = !logoutInProgress) { 
+                                authManager.logout { success ->
+                                    if (success) {
+                                        navController.navigate("login") {
+                                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                                        }
+                                    }
                                 }
                             },
                         verticalAlignment = Alignment.CenterVertically,
@@ -120,16 +97,24 @@ fun SettingsScreen(navController: NavController) {
                                 tint = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Text(
-                                text = "Déconnexion",
+                                text = if (logoutInProgress) "Déconnexion..." else "Déconnexion",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        if (logoutInProgress) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
                 }
             }

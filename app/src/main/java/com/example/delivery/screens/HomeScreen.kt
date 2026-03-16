@@ -48,15 +48,6 @@ fun HomeScreen(navController: NavController) {
                     IconButton(onClick = { /* Notifications */ }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notifications")
                     }
-                    IconButton(onClick = { 
-                        // Déconnexion et retour à la page de login
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(Screen.Home.route) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Déconnexion")
-                    }
                 }
             )
         },

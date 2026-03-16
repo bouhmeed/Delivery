@@ -5,11 +5,7 @@ plugins {
 
 android {
     namespace = "com.example.delivery"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.delivery"
@@ -19,6 +15,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Auth0 manifest placeholders
+        manifestPlaceholders["auth0Domain"] = "almakom.eu.auth0.com"
+        manifestPlaceholders["auth0Scheme"] = "delivery"
     }
 
     buildTypes {
@@ -55,22 +55,13 @@ dependencies {
     // Material Icons
     implementation("androidx.compose.material:material-icons-extended:1.7.1")
     
-    // Try with just networking libraries for Auth0 API calls
+    // Try with just networking libraries for API calls
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
     
-    // Chrome Custom Tabs for Universal Login
-    implementation("androidx.browser:browser:1.6.0")
-    
-    // Auth0 - temporarily commented out to test
-    // implementation("com.auth0.android:auth0:2.0.0") {
-    //     exclude(group = "com.android.support", module = "support-compat")
-    //     exclude(group = "com.android.support", module = "support-v4")
-    //     exclude(group = "com.auth0.android", module = "auth0-webauth")
-    //     exclude(group = "com.auth0.android", module = "auth0-webview")
-    //     exclude(group = "com.auth0.android", module = "auth0-lock")
-    // }
+    // Auth0
+    implementation("com.auth0.android:auth0:2.0.0")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
