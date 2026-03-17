@@ -1,5 +1,16 @@
 package com.example.delivery.screens
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -19,20 +30,32 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PODScreen(navController: NavController) {
+    val context = LocalContext.current
+    
     var hasSignature by remember { mutableStateOf(false) }
     var hasPhoto by remember { mutableStateOf(false) }
+    var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isConfirming by remember { mutableStateOf(false) }
     var deliveryCompleted by remember { mutableStateOf(false) }
     var showCancelDialog by remember { mutableStateOf(false) }
@@ -50,6 +73,48 @@ fun PODScreen(navController: NavController) {
     var recipientName by remember { mutableStateOf("") }
     var specialInstructions by remember { mutableStateOf("") }
     var packageCondition by remember { mutableStateOf("") }
+    
+    // Gestion des permissions caméra
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    
+    // Launcher pour demander la permission caméra
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+    }
+    
+    // Launcher pour prendre une photo
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            result.data?.extras?.get("data")?.let { data ->
+                photoBitmap = data as? Bitmap
+                hasPhoto = true
+            }
+        }
+    }
+
+    // Fonction pour prendre une photo
+    fun takePhoto() {
+        when {
+            hasCameraPermission -> {
+                val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                cameraLauncher.launch(intent)
+            }
+            else -> {
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
+    }
 
     // Données simulées pour la livraison
     val deliveryInfo = remember {
@@ -85,7 +150,10 @@ fun PODScreen(navController: NavController) {
             // Informations de la livraison
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -165,7 +233,10 @@ fun PODScreen(navController: NavController) {
             // Section Signature
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -319,7 +390,10 @@ fun PODScreen(navController: NavController) {
             // Section Informations Optionnelles
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -415,7 +489,10 @@ fun PODScreen(navController: NavController) {
             // Section Photo
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -471,9 +548,7 @@ fun PODScreen(navController: NavController) {
                                     
                                     // Bouton photo principal
                                     Button(
-                                        onClick = { 
-                                            hasPhoto = true
-                                        },
+                                        onClick = { takePhoto() },
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(56.dp),
@@ -502,72 +577,118 @@ fun PODScreen(navController: NavController) {
                                 }
                             }
                         } else {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(220.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                                )
-                            ) {
-                                Column(
+                            // Afficher la photo prise
+                            photoBitmap?.let { bitmap ->
+                                Card(
                                     modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(20.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.SpaceEvenly
+                                        .fillMaxWidth()
+                                        .height(300.dp)
+                                        .clip(RoundedCornerShape(8.dp))
                                 ) {
-                                    // Icône de succès
-                                    Icon(
-                                        Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(64.dp)
+                                    androidx.compose.foundation.Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = "Photo de livraison",
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize()
                                     )
-                                    
+                                }
+                                
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                // Bouton pour reprendre la photo
+                                OutlinedButton(
+                                    onClick = { 
+                                        photoBitmap = null
+                                        hasPhoto = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    border = BorderStroke(
+                                        1.dp, 
+                                        MaterialTheme.colorScheme.primary
+                                    )
+                                ) {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "🔄 Reprendre Photo",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            } ?: run {
+                                // Fallback si pas de bitmap
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(220.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                                    )
+                                ) {
                                     Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Text(
-                                            text = "📸 Photo Capturée!",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "Marchandises livrées avec succès",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    
-                                    // Bouton pour reprendre
-                                    OutlinedButton(
-                                        onClick = { 
-                                            hasPhoto = false
-                                        },
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(48.dp),
-                                        border = BorderStroke(
-                                            1.dp, 
-                                            MaterialTheme.colorScheme.primary
-                                        )
+                                            .fillMaxSize()
+                                            .padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.SpaceEvenly
                                     ) {
+                                        // Icône de succès
                                         Icon(
-                                            Icons.Default.Refresh,
+                                            Icons.Default.CheckCircle,
                                             contentDescription = null,
-                                            modifier = Modifier.size(20.dp),
-                                            tint = MaterialTheme.colorScheme.primary
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(64.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "🔄 Reprendre Photo",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                text = "📸 Photo Capturée!",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Marchandises livrées avec succès",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        
+                                        // Bouton pour reprendre
+                                        OutlinedButton(
+                                            onClick = { 
+                                                hasPhoto = false
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(48.dp),
+                                            border = BorderStroke(
+                                                1.dp, 
+                                                MaterialTheme.colorScheme.primary
+                                            )
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Refresh,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "🔄 Reprendre Photo",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
                                 }
                             }

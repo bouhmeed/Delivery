@@ -72,7 +72,10 @@ fun OrderDetailsScreen(navController: NavController) {
             // Carte principale avec informations de la commande
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -128,7 +131,10 @@ fun OrderDetailsScreen(navController: NavController) {
             // Informations du client
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -164,7 +170,10 @@ fun OrderDetailsScreen(navController: NavController) {
             // Articles de la commande
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
@@ -251,18 +260,29 @@ fun OrderDetailsScreen(navController: NavController) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Boutons principaux selon le statut
-                    if (orderStatus == "En attente") {
-                        // Bouton pour commencer le transport
+                    // Deux boutons principaux toujours visibles
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Bouton Commencer le Transport
                         Button(
                             onClick = { 
-                                orderStatus = "En cours"
+                                if (orderStatus == "En attente") {
+                                    orderStatus = "En cours"
+                                }
                             },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
+                            modifier = Modifier.weight(1f),
+                            enabled = orderStatus == "En attente",
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
+                                containerColor = if (orderStatus == "En attente") 
+                                    MaterialTheme.colorScheme.primary 
+                                else 
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (orderStatus == "En attente") 
+                                    MaterialTheme.colorScheme.onPrimary 
+                                else 
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         ) {
                             Icon(Icons.Default.LocalShipping, contentDescription = null)
@@ -272,17 +292,25 @@ fun OrderDetailsScreen(navController: NavController) {
                                 style = MaterialTheme.typography.titleMedium
                             )
                         }
-                    } else if (orderStatus == "En cours") {
-                        // Bouton pour valider la livraison (ouvre POD)
+                        
+                        // Bouton Valider la Livraison
                         Button(
                             onClick = { 
-                                navController.navigate(Screen.POD.route) 
+                                if (orderStatus == "En cours") {
+                                    navController.navigate(Screen.POD.route) 
+                                }
                             },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
+                            modifier = Modifier.weight(1f),
+                            enabled = orderStatus == "En cours",
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
+                                containerColor = if (orderStatus == "En cours") 
+                                    MaterialTheme.colorScheme.primary 
+                                else 
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (orderStatus == "En cours") 
+                                    MaterialTheme.colorScheme.onPrimary 
+                                else 
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         ) {
                             Icon(Icons.Default.CheckCircle, contentDescription = null)
