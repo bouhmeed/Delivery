@@ -18,13 +18,11 @@ import androidx.activity.ComponentActivity
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
 import com.example.delivery.auth.AuthManager
+import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun SettingsScreen(navController: NavController, authManager: AuthManager) {
-    
-    // Collect logout progress state
-    val logoutInProgress by authManager.logoutInProgress.collectAsState()
+fun SettingsScreen(navController: NavController) {
     
     Scaffold(
         topBar = {
@@ -51,6 +49,10 @@ fun SettingsScreen(navController: NavController, authManager: AuthManager) {
             )
         }
 
+        val context = LocalContext.current
+        val authManager = remember { AuthManager(context) }
+        var isLoggingOut by remember { mutableStateOf(false) }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -61,60 +63,40 @@ fun SettingsScreen(navController: NavController, authManager: AuthManager) {
             items(settingsItems) { item ->
                 SettingsCard(item = item, navController = navController)
             }
-            
+
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                            .clickable(enabled = !logoutInProgress) { 
-                                authManager.logout { success ->
-                                    if (success) {
-                                        navController.navigate("login") {
-                                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                                        }
+                if (isLoggingOut) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            isLoggingOut = true
+                            authManager.logout(
+                                onSuccess = {
+                                    isLoggingOut = false
+                                    Toast.makeText(context, "Déconnexion réussie", Toast.LENGTH_SHORT).show()
+                                    navController.navigate(Screen.Login.route) {
+                                        popUpTo(0) { inclusive = true }
                                     }
+                                },
+                                onFailure = { error ->
+                                    isLoggingOut = false
+                                    Toast.makeText(context, "Erreur: ${error.message}", Toast.LENGTH_LONG).show()
                                 }
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.ExitToApp,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Text(
-                                text = if (logoutInProgress) "Déconnexion..." else "Déconnexion",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                        if (logoutInProgress) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.ArrowForward,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
+                        Icon(Icons.Default.Logout, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Déconnexion")
                     }
                 }
             }
