@@ -54,7 +54,7 @@ fun LoginScreen(navController: NavController) {
                 onClick = {
                     isLoading = true
                     authManager.login(
-                        onSuccess = { credentials ->
+                        onSuccess = { credentials, userInfo ->
                             isLoading = false
                             Toast.makeText(context, "Connexion réussie", Toast.LENGTH_SHORT).show()
                             navController.navigate(Screen.Home.route) {

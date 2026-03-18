@@ -20,14 +20,60 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
 import com.example.delivery.auth.AuthManager
+import com.example.delivery.repository.UserRepository
+import com.example.delivery.models.UserResponse
+import com.example.delivery.network.ApiClient
+import com.example.delivery.network.DatabaseApiService
 import android.widget.Toast
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import retrofit2.Response
+import java.net.SocketTimeoutException
+import java.net.ConnectException
+import java.net.UnknownHostException
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(navController: NavController) {
+    val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    var isLoggingOut by remember { mutableStateOf(false) }
+    val userEmail = remember { authManager.getUserEmail() }
+    
+    // État pour stocker les informations de l'utilisateur
+    var userInfo by remember { mutableStateOf<UserResponse?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Database API service
+    val databaseApi = remember { ApiClient.instance.create(DatabaseApiService::class.java) }
+    
+    // État pour le test de connexion à la base de données
+    var isTestingConnection by remember { mutableStateOf(false) }
+    
+    // Récupérer les informations de l'utilisateur depuis l'API
+    LaunchedEffect(userEmail) {
+        userEmail?.let { email ->
+            isLoading = true
+            coroutineScope.launch {
+                val userRepository = UserRepository()
+                userRepository.getUserByEmail(email)
+                    .onSuccess { user ->
+                        userInfo = user
+                    }
+                    .onFailure { error ->
+                        // En cas d'erreur, on garde le comportement par défaut
+                        println("Erreur lors de la récupération de l'utilisateur: ${error.message}")
+                    }
+                isLoading = false
+            }
+        }
+    }
     
     Scaffold(
         topBar = {
@@ -54,10 +100,6 @@ fun SettingsScreen(navController: NavController) {
             )
         }
 
-        val context = LocalContext.current
-        val authManager = remember { AuthManager(context) }
-        var isLoggingOut by remember { mutableStateOf(false) }
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -67,7 +109,11 @@ fun SettingsScreen(navController: NavController) {
         ) {
             // Profile Header Card
             item {
-                ProfileHeaderCard()
+                ProfileHeaderCard(
+                    userEmail = userEmail,
+                    userName = userInfo?.firstName,
+                    isLoading = isLoading
+                )
             }
             
             // Settings Section
@@ -83,6 +129,81 @@ fun SettingsScreen(navController: NavController) {
             
             items(settingsItems) { item ->
                 SettingsCard(item = item, navController = navController)
+            }
+
+            // Database Connection Test Button
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            isTestingConnection = true
+                            Toast.makeText(context, "Test de connexion à la base de données...", Toast.LENGTH_SHORT).show()
+                            
+                            try {
+                                // Timeout de 30 secondes pour le test
+                                Toast.makeText(context, "🔄 Test de connexion (30s max)...", Toast.LENGTH_SHORT).show()
+                                val response: Response<List<com.example.delivery.network.TableResponse>> = withTimeout(30000) {
+                                    databaseApi.testConnection()
+                                }
+                                
+                                if (response.isSuccessful) {
+                                    val tables = response.body()
+                                    if (tables != null && tables.isNotEmpty()) {
+                                        Toast.makeText(context, "✅ Connexion réussie! ${tables.size} tables trouvées", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "⚠️ Connexion réussie mais aucune table trouvée", Toast.LENGTH_LONG).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "❌ Erreur HTTP: ${response.code()} ${response.message()}", Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: SocketTimeoutException) {
+                                Toast.makeText(context, "⏱️ Timeout: Le serveur ne répond pas", Toast.LENGTH_LONG).show()
+                            } catch (e: ConnectException) {
+                                Toast.makeText(context, "🔌 Connexion refusée: Vérifiez que le backend tourne sur 10.0.2.2:3000", Toast.LENGTH_LONG).show()
+                            } catch (e: UnknownHostException) {
+                                Toast.makeText(context, "🌐 Hôte inconnu: Vérifiez l'URL de l'API", Toast.LENGTH_LONG).show()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "❌ Erreur: ${e.message}", Toast.LENGTH_LONG).show()
+                                println("Erreur détaillée: ${e.stackTraceToString()}")
+                            } finally {
+                                isTestingConnection = false
+                            }
+                        }
+                    },
+                    enabled = !isTestingConnection,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clip(RoundedCornerShape(12.dp)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isTestingConnection) 
+                            MaterialTheme.colorScheme.surfaceVariant 
+                        else 
+                            MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (isTestingConnection) 
+                            MaterialTheme.colorScheme.onSurfaceVariant 
+                        else 
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    if (isTestingConnection) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Test en cours...")
+                    } else {
+                        Icon(Icons.Default.Storage, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Test connexion avec base de donner")
+                    }
+                }
             }
 
             item {
@@ -198,7 +319,7 @@ fun SettingsCard(item: SettingsItem, navController: NavController) {
 }
 
 @Composable
-fun ProfileHeaderCard() {
+fun ProfileHeaderCard(userEmail: String?, userName: String?, isLoading: Boolean) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -237,14 +358,18 @@ fun ProfileHeaderCard() {
             Spacer(modifier = Modifier.height(16.dp))
             
             Text(
-                text = "Chauffeur",
+                text = if (isLoading) {
+                    "Chargement..."
+                } else {
+                    userName ?: "Chauffeur"
+                },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             
             Text(
-                text = "Livreur Professionnel",
+                text = userEmail ?: "Livreur Professionnel",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
