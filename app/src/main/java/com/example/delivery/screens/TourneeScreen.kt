@@ -15,6 +15,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,8 +39,22 @@ import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
 import com.example.delivery.data.DeliveryData
+import com.example.delivery.network.ApiClient
+import com.example.delivery.network.TripApiService
+import com.example.delivery.network.UserApiService
+import com.example.delivery.network.VehicleApiService
+import com.example.delivery.network.DriverApiService
+import com.example.delivery.auth.AuthManager
+import com.example.delivery.models.UserResponse
+import com.example.delivery.models.Vehicle
+import com.example.delivery.models.Driver
+import com.example.delivery.models.Trip
+import android.widget.Toast
+import kotlinx.coroutines.launch
+import retrofit2.Response
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 
 // Classes de données pour la compatibilité (remplacées par DeliveryData)
 typealias TourInfo = com.example.delivery.data.TourInfo
@@ -45,23 +63,143 @@ typealias ExpeditionInfo = com.example.delivery.data.ExpeditionInfo
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TourneeScreen(navController: NavController) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val tripApiService = ApiClient.instance.create(TripApiService::class.java)
+    val userApiService = ApiClient.instance.create(UserApiService::class.java)
+    val vehicleApiService = ApiClient.instance.create(VehicleApiService::class.java)
+    val driverApiService = ApiClient.instance.create(DriverApiService::class.java)
+    val authManager = remember { AuthManager(context) }
+    
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var currentMonth by remember { mutableStateOf(YearMonth.from(LocalDate.now())) }
     var showStats by remember { mutableStateOf(false) }
-    var includeReturns by remember { mutableStateOf(false) }
+        
+    // États pour les données Trip et User
+    var trips by remember { mutableStateOf<List<Trip>>(emptyList()) }
+    var isLoadingTrips by remember { mutableStateOf(false) }
+    var tripError by remember { mutableStateOf<String?>(null) }
+    var currentDriver by remember { mutableStateOf<UserResponse?>(null) }
+    var isLoadingUser by remember { mutableStateOf(false) }
+    
+    // Cache pour les véhicules et chauffeurs
+    var vehicleCache by remember { mutableStateOf<Map<String, Vehicle>>(emptyMap()) }
+    var driverCache by remember { mutableStateOf<Map<String, Driver>>(emptyMap()) }
+    
+    // Fonctions pour gérer le cache
+    fun addToVehicleCache(id: String, vehicle: Vehicle) {
+        vehicleCache = vehicleCache + (id to vehicle)
+    }
+    
+    fun addToDriverCache(id: String, driver: Driver) {
+        driverCache = driverCache + (id to driver)
+    }
+    
+    // Fonction pour charger les trips du driver connecté
+    fun loadDriverTrips(driverId: String) {
+        coroutineScope.launch {
+            isLoadingTrips = true
+            tripError = null
+            try {
+                val response: Response<List<Trip>> = tripApiService.getTripsByDriver(driverId)
+                if (response.isSuccessful) {
+                    trips = response.body() ?: emptyList()
+                    Toast.makeText(context, "✅ ${trips.size} trajets chargés pour le driver", Toast.LENGTH_SHORT).show()
+                } else {
+                    tripError = "Erreur ${response.code()}: ${response.message()}"
+                    Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                tripError = "Exception: ${e.message}"
+                Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
+            } finally {
+                isLoadingTrips = false
+            }
+        }
+    }
+    
+    // Fonction pour charger les informations du driver connecté
+    fun loadCurrentUser() {
+        coroutineScope.launch {
+            isLoadingUser = true
+            try {
+                val userEmail = authManager.getUserEmail()
+                if (userEmail != null) {
+                    val response = userApiService.getUserByEmail(userEmail)
+                    if (response.isSuccessful) {
+                        currentDriver = response.body()
+                        // Une fois le driver chargé, charger ses trips
+                        val driverId = response.body()?.driverId?.toString()
+                        if (driverId != null) {
+                            loadDriverTrips(driverId)
+                        } else {
+                            tripError = "Aucun driverId trouvé pour cet utilisateur"
+                            isLoadingTrips = false
+                        }
+                    } else {
+                        tripError = "Erreur chargement utilisateur: ${response.code()}"
+                    }
+                } else {
+                    tripError = "Utilisateur non connecté"
+                }
+            } catch (e: Exception) {
+                tripError = "Exception: ${e.message}"
+            } finally {
+                isLoadingUser = false
+            }
+        }
+    }
+    
+    // Fonction pour recharger (utilise le driverId déjà chargé)
+    fun refreshTrips() {
+        val driverId = currentDriver?.driverId?.toString()
+        if (driverId != null) {
+            loadDriverTrips(driverId)
+        } else {
+            loadCurrentUser() // Recharger depuis le début
+        }
+    }
+    
+    // Charger l'utilisateur et ses trips au démarrage
+    LaunchedEffect(Unit) {
+        loadCurrentUser()
+    }
+    
+    // Fonction pour extraire la date d'un trip
+    fun getTripDate(trip: Trip): LocalDate? {
+        return try {
+            if (trip.tripDate.isNotEmpty()) {
+                // Parser la date ISO 8601
+                LocalDate.parse(trip.tripDate.substring(0, 10))
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    // Filtrer les trips par date sélectionnée
+    val tripsForSelectedDate = remember(trips, selectedDate) {
+        trips.filter { trip ->
+            val tripDate = getTripDate(trip)
+            tripDate == selectedDate
+        }
+    }
+    
+    // Compter les trips par jour pour le calendrier
+    val tripsByDate = remember(trips) {
+        trips.groupBy { trip -> getTripDate(trip) }
+            .mapValues { it.value.size }
+            .filterKeys { it != null }
+            .mapKeys { it.key!! }
+    }
     
     // Utiliser les données partagées
     val todayTour = DeliveryData.todayTour
     val allTours = remember { listOf(todayTour) }
     
-    // Données simulées des tournees par jour
-    val toursByDate = remember {
-        mapOf(
-            LocalDate.now() to todayTour.expeditionCount,
-            LocalDate.now().minusDays(1) to 2,
-            LocalDate.now().plusDays(1) to 4,
-            LocalDate.now().plusDays(2) to 3,
-        )
+    // Remplacer les données simulées par les données réelles des trips
+    val realToursByDate = remember(tripsByDate) {
+        tripsByDate
     }
     
     val toursByLocation = remember {
@@ -86,7 +224,7 @@ fun TourneeScreen(navController: NavController) {
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigate(Screen.Home.route) }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
                 actions = {
@@ -119,63 +257,27 @@ fun TourneeScreen(navController: NavController) {
                     TourneeCalendarCard(
                         currentMonth = currentMonth,
                         selectedDate = selectedDate,
-                        toursByDate = toursByDate,
+                        toursByDate = realToursByDate,
                         onDateSelected = { date -> selectedDate = date },
                         onMonthChanged = { month -> currentMonth = month }
                     )
-                    
-                    // Options de filtrage
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Text(
-                                text = "Options",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(bottom = 12.dp)
-                            )
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = includeReturns,
-                                    onCheckedChange = { includeReturns = it }
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "Inclure les retours",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
                 }
             }
             
-            // Résumé du jour sélectionné
+            // Box pour les informations Trip
             item {
-                DaySummaryCard(
-                    selectedDate = selectedDate,
-                    allTours = allTours,
-                    toursByDate = toursByDate
+                TripInfoBox(
+                    trips = trips,
+                    isLoading = isLoadingTrips || isLoadingUser,
+                    error = tripError,
+                    onRefresh = { refreshTrips() }
                 )
             }
             
-            // Tournées par ville
+            // Trips du jour sélectionné
             item {
                 Text(
-                    text = "Tournées du ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                    text = "Trips du ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${selectedDate.year}",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -183,62 +285,54 @@ fun TourneeScreen(navController: NavController) {
                 )
             }
             
-            // Afficher toutes les tournées
-            items(allTours) { tour ->
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Carte d'informations de la tournée
-                    TourInfoCard(currentTour = tour)
-                    
-                    // Section des expéditions pour cette ville
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Expéditions (${tour.expeditionCount})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            
-                            // Bouton d'action rapide
-                            OutlinedButton(
-                                onClick = { 
-                                    // Action pour voir tous les détails
-                                },
-                                modifier = Modifier.height(32.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.secondary
-                                )
-                            ) {
-                                Text(
-                                    text = "Voir tout",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                        
-                        // Liste des expéditions pour cette ville
-                        tour.expeditions.forEach { expedition ->
-                            ExpeditionCard(expedition = expedition)
-                        }
-                    }
-                    
-                    // Séparateur entre les villes
-                    if (tour.city != allTours.last().city) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            // Afficher les trips du jour sélectionné
+            if (tripsForSelectedDate.isNotEmpty()) {
+                items(tripsForSelectedDate) { trip ->
+                    TripDetailCard(
+                        trip = trip,
+                        vehicleApiService = vehicleApiService,
+                        driverApiService = driverApiService,
+                        vehicleCache = vehicleCache,
+                        driverCache = driverCache,
+                        onVehicleLoaded = { id, vehicle -> addToVehicleCache(id, vehicle) },
+                        onDriverLoaded = { id, driver -> addToDriverCache(id, driver) }
+                    )
+                }
+            } else if (!isLoadingTrips && !isLoadingUser && tripError == null) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(24.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.EventBusy,
+                                contentDescription = "Aucun trip",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Aucun trip prévu",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Pour le ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 }
             }
@@ -434,7 +528,7 @@ fun TourneeCalendarCard(
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
                 ) {
                     Icon(
-                        Icons.Default.KeyboardArrowLeft, 
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft, 
                         contentDescription = "Mois précédent",
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -454,7 +548,7 @@ fun TourneeCalendarCard(
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
                 ) {
                     Icon(
-                        Icons.Default.KeyboardArrowRight, 
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight, 
                         contentDescription = "Mois suivant",
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -724,5 +818,569 @@ fun SummaryItem(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
         )
+    }
+}
+
+// Composant pour afficher les informations Trip
+@Composable
+fun TripInfoBox(
+    trips: List<Trip>,
+    isLoading: Boolean,
+    error: String?,
+    onRefresh: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(6.dp, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            // En-tête avec titre et bouton refresh
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DirectionsCar,
+                        contentDescription = "Trip",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Informations Trip",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Actualiser",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            when {
+                isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Chargement des trajets...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                
+                error != null -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "Erreur",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Erreur de chargement",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                
+                trips.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DirectionsCar,
+                                contentDescription = "Aucun trip",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Aucun trajet trouvé",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+                
+                else -> {
+                    // Statistiques des trips
+                    val readyTrips = trips.count { it.status == "READY" }
+                    val completedTrips = trips.count { it.status == "COMPLETED" }
+                    val totalTrips = trips.size
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        TripStatItem(
+                            label = "Total",
+                            value = totalTrips.toString(),
+                            icon = Icons.Default.Route,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        TripStatItem(
+                            label = "Prêts",
+                            value = readyTrips.toString(),
+                            icon = Icons.Default.PlayArrow,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        TripStatItem(
+                            label = "Terminés",
+                            value = completedTrips.toString(),
+                            icon = Icons.Default.CheckCircle,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Liste des 3 premiers trips
+                    Text(
+                        text = "Derniers trajets:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    trips.take(3).forEach { trip ->
+                        TripItemRow(trip = trip)
+                        if (trip != trips.take(3).last()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                thickness = 1.dp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TripStatItem(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    color: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(8.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = color,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+        )
+    }
+}
+
+@Composable
+fun TripItemRow(trip: Trip) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // ID et Date
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Trip #${trip.id}",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = trip.tripDate.substring(0, 10) + "...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+        
+        // Statut
+        val status = trip.status
+        val statusColor = when (status) {
+            "READY" -> MaterialTheme.colorScheme.secondary
+            "COMPLETED" -> MaterialTheme.colorScheme.tertiary
+            "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.outline
+        }
+        
+        Surface(
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)),
+            color = statusColor.copy(alpha = 0.1f)
+        ) {
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = statusColor,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
+    }
+}
+
+// Composant pour afficher les détails d'un trip avec noms réels et cache
+@Composable
+fun TripDetailCard(
+    trip: Trip,
+    vehicleApiService: VehicleApiService,
+    driverApiService: DriverApiService,
+    vehicleCache: Map<String, Vehicle>,
+    driverCache: Map<String, Driver>,
+    onVehicleLoaded: (String, Vehicle) -> Unit,
+    onDriverLoaded: (String, Driver) -> Unit
+) {
+    val tripId = trip.id
+    val tripDate = trip.tripDate
+    val driverId = trip.driverId ?: "N/A"
+    val vehicleId = trip.vehicleId ?: "N/A"
+    val status = trip.status
+    val tripIdentifier = trip.tripId
+    
+    // États pour les données récupérées
+    var vehicle by remember { mutableStateOf(vehicleCache[vehicleId]) }
+    var driver by remember { mutableStateOf(driverCache[driverId]) }
+    val initialVehicle = vehicleCache[vehicleId]
+    val initialDriver = driverCache[driverId]
+    var isLoadingDetails by remember { mutableStateOf(initialVehicle == null && vehicleId != "N/A" || initialDriver == null && driverId != "N/A") }
+    
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Charger les détails uniquement si pas dans le cache
+    LaunchedEffect(vehicleId, driverId) {
+        val currentVehicle = vehicle
+        val currentDriver = driver
+        
+        if ((currentVehicle == null && vehicleId != "N/A") || (currentDriver == null && driverId != "N/A")) {
+            isLoadingDetails = true
+            coroutineScope.launch {
+                try {
+                    // Récupérer les infos du véhicule si pas en cache
+                    if (currentVehicle == null && vehicleId != "N/A") {
+                        val vehicleResponse = vehicleApiService.getVehicleById(vehicleId)
+                        if (vehicleResponse.isSuccessful) {
+                            vehicleResponse.body()?.let { v ->
+                                vehicle = v
+                                onVehicleLoaded(vehicleId, v)
+                            }
+                        }
+                    }
+                    
+                    // Récupérer les infos du chauffeur si pas en cache
+                    if (currentDriver == null && driverId != "N/A") {
+                        val driverResponse = driverApiService.getDriverById(driverId)
+                        if (driverResponse.isSuccessful) {
+                            driverResponse.body()?.let { d ->
+                                driver = d
+                                onDriverLoaded(driverId, d)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Erreur silencieuse pour ne pas bloquer l'UI
+                } finally {
+                    isLoadingDetails = false
+                }
+            }
+        }
+    }
+    
+    // Formater la date
+    val formattedDate = try {
+        if (tripDate.isNotEmpty()) {
+            val date = LocalDate.parse(tripDate.substring(0, 10))
+            DateTimeFormatter.ofPattern("dd MMMM yyyy").format(date)
+        } else "Date inconnue"
+    } catch (e: Exception) {
+        "Date inconnue"
+    }
+    
+    // Couleur du statut
+    val statusColor = when (status) {
+        "READY" -> MaterialTheme.colorScheme.secondary
+        "COMPLETED" -> MaterialTheme.colorScheme.tertiary
+        "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.outline
+    }
+    
+    // Icône du statut
+    val statusIcon = when (status) {
+        "READY" -> Icons.Default.PlayArrow
+        "COMPLETED" -> Icons.Default.CheckCircle
+        "IN_PROGRESS" -> Icons.Default.DirectionsCar
+        else -> Icons.Default.Help
+    }
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .shadow(4.dp, RoundedCornerShape(12.dp))
+            .clickable { /* Navigation vers détails du trip */ },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // En-tête avec ID et statut
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Trip #$tripId",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (tripIdentifier != null) {
+                        Text(
+                            text = tripIdentifier,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                
+                Surface(
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)),
+                    color = statusColor.copy(alpha = 0.1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = status,
+                            tint = statusColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = statusColor
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Date
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = "Date",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = formattedDate,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Informations véhicule et driver avec noms réels
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DirectionsCar,
+                        contentDescription = "Véhicule",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Véhicule",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val currentVehicleForLoading = vehicle
+                        val currentDriverForLoading = driver
+                        if (isLoadingDetails && currentVehicleForLoading == null) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            val currentVehicle = vehicle
+                            if (currentVehicle != null) {
+                                Text(
+                                    text = currentVehicle.name ?: "Véhicule inconnu (ID: $vehicleId)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (currentVehicle.registration != null) {
+                                    Text(
+                                        text = "Immat: ${currentVehicle.registration}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "Véhicule inconnu (ID: $vehicleId)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Driver",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Chauffeur",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val currentDriverForLoading = driver
+                        if (isLoadingDetails && currentDriverForLoading == null) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            val currentDriver = driver
+                            if (currentDriver != null) {
+                                Text(
+                                    text = currentDriver.name ?: "Chauffeur inconnu (ID: $driverId)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (currentDriver.licenseNumber != null) {
+                                    Text(
+                                        text = "Permis: ${currentDriver.licenseNumber}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "Chauffeur inconnu (ID: $driverId)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

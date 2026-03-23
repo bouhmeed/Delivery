@@ -10,7 +10,9 @@ object DeliveryData {
         name = "Ahmed Khemir",
         email = "chauffeur@delivery.com",
         vehicle = "Camion Volvo FH16",
-        immatriculation = "XY-456-ZZ"
+        immatriculation = "XY-456-ZZ",
+        employmentType = "Aucune idée",
+        status = "Aucune idée"
     )
     
     // Tournée du jour
@@ -106,7 +108,9 @@ data class DriverInfo(
     val name: String,
     val email: String,
     val vehicle: String,
-    val immatriculation: String
+    val immatriculation: String,
+    val employmentType: String = "Aucune idée",
+    val status: String = "Aucune idée"
 )
 
 data class TourInfo(

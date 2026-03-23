@@ -25,9 +25,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
 import com.example.delivery.data.DeliveryData
+import com.example.delivery.auth.AuthManager
+import com.example.delivery.repository.UserRepository
+import com.example.delivery.repository.DriverRepository
+import com.example.delivery.repository.VehicleRepository
+import com.example.delivery.models.UserResponse
+import com.example.delivery.models.Driver
+import com.example.delivery.models.Vehicle
+import com.example.delivery.network.ApiClient
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -35,7 +47,60 @@ import java.time.LocalDate
 fun HomeScreen(navController: NavController) {
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     
-    // Utiliser les données partagées
+    // Auth et récupération des données utilisateur
+    val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    val userEmail = remember { authManager.getUserEmail() }
+    val coroutineScope = rememberCoroutineScope()
+    
+    // États pour les données utilisateur, chauffeur et véhicule
+    var userInfo by remember { mutableStateOf<UserResponse?>(null) }
+    var driverInfo by remember { mutableStateOf<Driver?>(null) }
+    var vehicleInfo by remember { mutableStateOf<Vehicle?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    
+    // Récupérer les données utilisateur et chauffeur
+    LaunchedEffect(userEmail) {
+        userEmail?.let { email ->
+            isLoading = true
+            coroutineScope.launch {
+                // Récupérer l'utilisateur
+                val userRepository = UserRepository()
+                userRepository.getUserByEmail(email)
+                    .onSuccess { user ->
+                        userInfo = user
+                        
+                        // Si l'utilisateur a un driverId, récupérer les infos du chauffeur
+                        user.driverId?.let { driverId ->
+                            val driverRepository = DriverRepository()
+                            driverRepository.getDriverById(driverId)
+                                .onSuccess { driver ->
+                                    driverInfo = driver
+                                    
+                                    // Récupérer le véhicule du chauffeur
+                                    val vehicleRepository = VehicleRepository()
+                                    vehicleRepository.getVehicleByDriverId(driverId)
+                                        .onSuccess { vehicle ->
+                                            vehicleInfo = vehicle
+                                        }
+                                        .onFailure { error ->
+                                            println("Erreur lors de la récupération du véhicule: ${error.message}")
+                                        }
+                                }
+                                .onFailure { error ->
+                                    println("Erreur lors de la récupération du chauffeur: ${error.message}")
+                                }
+                        }
+                    }
+                    .onFailure { error ->
+                        println("Erreur lors de la récupération de l'utilisateur: ${error.message}")
+                    }
+                isLoading = false
+            }
+        }
+    }
+    
+    // Utiliser les données partagées (fallback si API pas disponible)
     val currentDriver = DeliveryData.currentDriver
     val todayStats = DeliveryData.todayStats
     val todayTour = DeliveryData.todayTour
@@ -60,9 +125,62 @@ fun HomeScreen(navController: NavController) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Indicateur de journée - EN PREMIER
+            item {
+                DayIndicatorCard(selectedDate = selectedDate, onDateSelected = { date ->
+                    selectedDate = date
+                })
+            }
+            
             // Carte de bienvenue avec infos essentielles
             item {
-                DriverInfoCard(driver = currentDriver, tour = todayTour)
+                if (isLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    // Utiliser le vrai nom du chauffeur et véhicule si disponibles, sinon "aucune idée"
+                    val driverName = driverInfo?.name ?: userInfo?.firstName ?: "Aucune idée"
+                    val vehicleName = vehicleInfo?.name ?: "Aucune idée"
+                    val vehicleRegistration = vehicleInfo?.registration ?: "Aucune idée"
+                    val employmentType = driverInfo?.employmentType ?: "Aucune idée"
+                    val driverStatus = driverInfo?.status ?: "Aucune idée"
+                    
+                    val updatedDriver = currentDriver.copy(
+                        name = driverName,
+                        vehicle = vehicleName,
+                        immatriculation = vehicleRegistration,
+                        employmentType = employmentType,
+                        status = driverStatus
+                    )
+                    DriverInfoCard(driver = updatedDriver, tour = todayTour)
+                }
+            }
+            
+            // Carte d'informations détaillées du véhicule
+            item {
+                // Utiliser les données du véhicule si disponibles, sinon "aucune idée"
+                val displayVehicle = vehicleInfo ?: Vehicle(
+                    id = "1",
+                    name = "Aucune idée",
+                    registration = "Aucune idée",
+                    capacityWeight = null,
+                    capacityVolume = null,
+                    tenantId = "1",
+                    dernierControle = null,
+                    driverId = driverInfo?.id,
+                    prochainControle = null,
+                    status = "UNKNOWN",
+                    type = "Aucune idée",
+                    createdAt = null,
+                    updatedAt = null
+                )
+                VehicleInfoCard(vehicle = displayVehicle)
             }
             
             // Statistiques importantes du jour
@@ -136,6 +254,16 @@ fun DriverInfoCard(driver: com.example.delivery.data.DriverInfo, tour: com.examp
                     )
                     Text(
                         text = "Immat: ${driver.immatriculation}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Type: ${driver.employmentType}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Statut: ${driver.status}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -766,12 +894,339 @@ fun DaySummaryCard(stats: com.example.delivery.data.DailyStats, tour: com.exampl
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            Text(
-                text = "Conseil du jour: N'oubliez pas de vérifier les documents de chaque livraison avant de quitter le client.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+            }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun VehicleInfoCard(vehicle: Vehicle) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(12.dp)
             )
+            .clip(RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            // Header avec titre
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Informations Véhicule",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                // Badge de statut
+                Surface(
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    color = when (vehicle.status?.uppercase()) {
+                        "ACTIVE" -> MaterialTheme.colorScheme.primaryContainer
+                        "MAINTENANCE" -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                ) {
+                    Text(
+                        text = vehicle.status ?: "INCONNU",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = when (vehicle.status?.uppercase()) {
+                            "ACTIVE" -> MaterialTheme.colorScheme.onPrimaryContainer
+                            "MAINTENANCE" -> MaterialTheme.colorScheme.onErrorContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Nom du véhicule en évidence
+            Text(
+                text = vehicle.name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Informations détaillées en grille 2x2
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Première ligne
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        VehicleInfoItem(
+                            icon = Icons.Default.Badge,
+                            label = "Immatriculation",
+                            value = vehicle.registration
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        VehicleInfoItem(
+                            icon = Icons.Default.Scale,
+                            label = "Capacité Poids",
+                            value = vehicle.capacityWeight?.let { "${it} kg" }
+                        )
+                    }
+                }
+                
+                // Deuxième ligne
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        VehicleInfoItem(
+                            icon = Icons.Default.Inventory2,
+                            label = "Capacité Volume",
+                            value = vehicle.capacityVolume?.let { "${it} m³" }
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        VehicleInfoItem(
+                            icon = Icons.Default.Category,
+                            label = "Type",
+                            value = vehicle.type
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Informations de contrôle si disponibles
+            if (vehicle.dernierControle != null || vehicle.prochainControle != null) {
+                Divider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    vehicle.dernierControle?.let { dernier ->
+                        Column {
+                            Text(
+                                text = "Dernier contrôle",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = dernier,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    
+                    vehicle.prochainControle?.let { prochain ->
+                        Column(
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = "Prochain contrôle",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = prochain,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VehicleInfoItem(
+    icon: ImageVector,
+    label: String,
+    value: String?
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value ?: "Aucune idée",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (value == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (value == null) FontWeight.Normal else FontWeight.Medium
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DayIndicatorCard(
+    selectedDate: LocalDate,
+    onDateSelected: (LocalDate) -> Unit
+) {
+    val today = LocalDate.now()
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")
+    val formattedDate = today.format(formatter).replaceFirstChar { it.uppercase() }
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clip(RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            // Header avec titre et badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Today,
+                        contentDescription = "Date du jour",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "Journée Actuelle",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                // Badge "AUJOURD'HUI"
+                Surface(
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    Text(
+                        text = "AUJOURD'HUI",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Date du jour en évidence
+            Text(
+                text = formattedDate,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Informations détaillées en grille
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Semaine",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${today.get(java.time.temporal.WeekFields.ISO.weekOfYear())}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Mois",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = today.month.name.lowercase().replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Jour",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${today.dayOfMonth}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
         }
     }
 }

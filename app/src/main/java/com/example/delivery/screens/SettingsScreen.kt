@@ -208,6 +208,35 @@ fun SettingsScreen(navController: NavController) {
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
+                
+                // Trip Test Button
+                Button(
+                    onClick = {
+                        navController.navigate(Screen.TripTest.route)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clip(RoundedCornerShape(12.dp)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DirectionsCar,
+                        contentDescription = "Tester Trip",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Tester Table Trip", fontWeight = FontWeight.Medium)
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
                 if (isLoggingOut) {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(

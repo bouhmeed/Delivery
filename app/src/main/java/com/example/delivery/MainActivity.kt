@@ -58,6 +58,9 @@ class MainActivity : ComponentActivity() {
                         composable("order_details/{orderId}") { backStackEntry ->
                             OrderDetailsScreen(navController = navController)
                         }
+                        composable(Screen.TripTest.route) {
+                            TripTestScreen(navController = navController)
+                        }
                     }
                 }
             }
