@@ -295,7 +295,11 @@ fun TourneeScreen(navController: NavController) {
                         vehicleCache = vehicleCache,
                         driverCache = driverCache,
                         onVehicleLoaded = { id, vehicle -> addToVehicleCache(id, vehicle) },
-                        onDriverLoaded = { id, driver -> addToDriverCache(id, driver) }
+                        onDriverLoaded = { id, driver -> addToDriverCache(id, driver) },
+                        onTripClick = { tripId -> 
+                            val tripIdInt = tripId.toIntOrNull() ?: 0
+                            navController.navigate("${Screen.TripDetail.route}/$tripIdInt")
+                        }
                     )
                 }
             } else if (!isLoadingTrips && !isLoadingUser && tripError == null) {
@@ -1109,7 +1113,8 @@ fun TripDetailCard(
     vehicleCache: Map<String, Vehicle>,
     driverCache: Map<String, Driver>,
     onVehicleLoaded: (String, Vehicle) -> Unit,
-    onDriverLoaded: (String, Driver) -> Unit
+    onDriverLoaded: (String, Driver) -> Unit,
+    onTripClick: (String) -> Unit
 ) {
     val tripId = trip.id
     val tripDate = trip.tripDate
@@ -1197,7 +1202,7 @@ fun TripDetailCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .shadow(4.dp, RoundedCornerShape(12.dp))
-            .clickable { /* Navigation vers détails du trip */ },
+            .clickable { onTripClick(tripId) },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface

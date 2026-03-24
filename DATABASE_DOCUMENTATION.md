@@ -992,4 +992,205 @@ The `_prisma_migrations` table shows 5 successful migrations applied on 2026-03-
 
 ---
 
+# Core App Tables - Delivery Management Focus
+
+## Selected Tables for Mobile App
+
+The following 7 tables form the core data model for the delivery management mobile application:
+
+### 📱 **App Core Tables**
+
+1. **Driver** - Driver profiles and authentication
+2. **Trip** - Daily tours and route planning
+3. **Shipment** - Individual deliveries and tracking
+4. **Location** - Addresses and geographic points
+5. **Client** - Customer information
+6. **DeliveryImage** - Proof of delivery photos
+7. **TripStop** - Stop sequence and routing
+8. **TripShipmentLink** - Links trips to shipments
+
+---
+
+## Table: Driver
+
+**Description**: Core driver management for mobile app authentication and profile.
+
+### Essential Columns for App
+- **id**: Primary key
+- **name**: Driver full name
+- **phone**: Contact number
+- **email**: Email address
+- **status**: Driver status ('ACTIF', 'INACTIF')
+- **tenantId**: Multi-tenant isolation
+
+### App Integration Points
+- **Authentication**: Link with User table for login
+- **Profile Display**: Show driver name and contact info
+- **Status Management**: Active/inactive driver status
+- **Trip Assignment**: Filter trips by assigned driver
+
+---
+
+## Table: Trip
+
+**Description**: Daily tours and route planning for driver schedules.
+
+### Essential Columns for App
+- **id**: Primary key
+- **tripDate**: Scheduled date
+- **driverId**: Assigned driver
+- **status**: Trip status ('PLANNING', 'READY', 'IN_PROGRESS', 'COMPLETED')
+- **tripId**: Unique trip identifier (e.g., "TRIP-2026-001")
+
+### App Integration Points
+- **Daily Schedule**: Show today's trips for logged-in driver
+- **Trip Status Tracking**: Real-time status updates
+- **Route Planning**: Sequence of stops and deliveries
+- **Performance Metrics**: Trip completion tracking
+
+---
+
+## Table: Shipment
+
+**Description**: Individual deliveries with comprehensive tracking information.
+
+### Essential Columns for App
+- **id**: Primary key
+- **shipmentNo**: Unique shipment number
+- **customerId**: Client reference
+- **status**: Delivery status ('TO_PLAN', 'EXPEDITION', 'DELIVERED')
+- **description**: Delivery details
+- **quantity**: Item count
+- **deliveryAddress**: Destination address
+- **deliveryCity**: Destination city
+- **driverId**: Assigned driver
+
+### App Integration Points
+- **Delivery List**: Show shipments for current trip
+- **Status Updates**: Mark shipments as delivered
+- **Customer Info**: Display delivery details
+- **Proof Collection**: Link to delivery images
+
+---
+
+## Table: Location
+
+**Description**: Geographic addresses for depots, clients, and stops.
+
+### Essential Columns for App
+- **id**: Primary key
+- **name**: Location name
+- **address**: Street address
+- **city**: City
+- **postalCode**: Postal code
+
+### App Integration Points
+- **Route Display**: Show addresses on trip route
+- **Navigation**: Integration with map services
+- **Customer Locations**: Display client addresses
+- **Depot Information**: Show starting/ending points
+
+---
+
+## Table: Client
+
+**Description**: Customer information for delivery management.
+
+### Essential Columns for App
+- **id**: Primary key
+- **name**: Customer name
+- **address**: Customer address
+- **city**: Customer city
+- **phone**: Contact phone
+- **email**: Contact email
+
+### App Integration Points
+- **Customer Display**: Show recipient information
+- **Contact Options**: Call/message customers
+- **Delivery History**: View past deliveries
+- **Address Verification**: Confirm delivery locations
+
+---
+
+## Table: DeliveryImage
+
+**Description**: Proof of delivery photos and documents.
+
+### Essential Columns for App
+- **id**: Primary key (UUID)
+- **url**: Image URL
+- **documentType**: Type ('PHOTO_DELIVERY', 'SIGNATURE_BL')
+- **proofId**: Reference to delivery proof
+- **createdAt**: Capture timestamp
+
+### App Integration Points
+- **Photo Capture**: Take delivery photos
+- **Signature Collection**: Capture customer signatures
+- **Proof Gallery**: View all delivery proofs
+- **Document Upload**: Store proof documents
+
+---
+
+## Table: TripStop
+
+**Description**: Stop sequence for trip routing and navigation.
+
+### Essential Columns for App
+- **id**: Primary key
+- **tripId**: Reference to trip
+- **sequence**: Stop order (1, 2, 3...)
+- **locationId**: Reference to location
+- **stopType**: Type ('PICKUP', 'DELIVERY')
+
+### App Integration Points
+- **Route Sequence**: Display ordered stops
+- **Navigation**: Step-by-step directions
+- **Stop Completion**: Mark stops as completed
+- **Progress Tracking**: Show trip progress
+
+---
+
+## Table: TripShipmentLink
+
+**Description**: Links trips to shipments with execution status.
+
+### Essential Columns for App
+- **id**: Primary key
+- **tripId**: Reference to trip
+- **shipmentId**: Reference to shipment
+- **status**: Execution status ('NON_DEMARRE', 'EN_COURS', 'TERMINE')
+- **podDone**: Proof of delivery completed
+- **sequence**: Order within trip
+
+### App Integration Points
+- **Shipment Assignment**: Link shipments to trips
+- **Status Tracking**: Track individual shipment progress
+- **POD Management**: Mark when proof is collected
+- **Delivery Sequence**: Show delivery order
+
+---
+
+## 🔄 **Data Flow for App**
+
+### Typical Driver Workflow:
+1. **Login** → Authenticate driver (Driver + User tables)
+2. **View Today's Trips** → Filter trips by driver and date (Trip table)
+3. **Start Trip** → Update trip status to 'IN_PROGRESS' (Trip table)
+4. **View Stops** → Get ordered stop sequence (TripStop + Location tables)
+5. **Navigate to Stop** → Show address and customer info (Location + Client tables)
+6. **View Shipments** → Get deliveries for current stop (TripShipmentLink + Shipment tables)
+7. **Complete Delivery** → Update shipment status and collect proof (Shipment + DeliveryImage tables)
+8. **Mark Stop Complete** → Update stop completion (TripStop table)
+9. **Complete Trip** → Update trip status to 'COMPLETED' (Trip table)
+
+### Key Relationships:
+- **Driver** → **Trip** (one-to-many)
+- **Trip** → **TripStop** (one-to-many)
+- **Trip** → **TripShipmentLink** → **Shipment** (many-to-many)
+- **Shipment** → **Client** (many-to-one)
+- **TripStop** → **Location** (many-to-one)
+- **Shipment** → **DeliveryImage** (one-to-many)
+
+---
+
 **Database documentation completed for all 23 tables.**

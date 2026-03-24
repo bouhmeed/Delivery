@@ -13,6 +13,9 @@ const clientRoutes = require('./routes/clients');
 const vehicleRoutes = require('./routes/vehicles');
 const itemRoutes = require('./routes/items');
 const locationRoutes = require('./routes/locations');
+const todayTourRoutes = require('./routes/today-tour');
+const shipmentSearchRoutes = require('./routes/shipment');
+const tourneeDetailsRoutes = require('./routes/tourneeDetails');
 
 const app = express();
 app.use(cors());
@@ -27,6 +30,9 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/locations', locationRoutes);
+app.use('/api/today-tour', todayTourRoutes);
+app.use('/api/shipment', shipmentSearchRoutes);
+app.use('/api/tournee', tourneeDetailsRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api', databaseRoutes);
 

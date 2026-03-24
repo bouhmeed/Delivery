@@ -59,6 +59,22 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
     
+    // ML Kit Barcode Scanning
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    
+    // CameraX for camera functionality
+    implementation("androidx.camera:camera-core:1.3.1")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
+    implementation("androidx.camera:camera-extensions:1.3.1")
+    
+    // Permissions handling
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+    
+    // Lifecycle Compose
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

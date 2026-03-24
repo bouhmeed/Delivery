@@ -61,6 +61,13 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.TripTest.route) {
                             TripTestScreen(navController = navController)
                         }
+                        composable("${Screen.TripDetail.route}/{tripId}") { backStackEntry ->
+                            val tripId = backStackEntry.arguments?.getString("tripId")?.toIntOrNull() ?: 0
+                            TripDetailScreen(
+                                tripId = tripId,
+                                navController = navController
+                            )
+                        }
                     }
                 }
             }
