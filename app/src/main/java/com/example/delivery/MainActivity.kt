@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -41,7 +42,63 @@ class MainActivity : ComponentActivity() {
                             TourneeScreen(navController = navController)
                         }
                         composable(Screen.Delivery.route) {
-                            OrdersListScreen(navController = navController)
+                            DeliveryTrackingScreenWithDetails(
+                                driverId = 5, // Change to 5 for testing, or get from user session
+                                navController = navController,
+                                onNavigateToDelivery = { delivery ->
+                                    // Navigate to delivery details if needed
+                                    navController.navigate("order_details/${delivery.shipmentId}")
+                                },
+                                onNavigateToMap = { delivery ->
+                                    // Open maps with delivery address
+                                    // You can implement map navigation here
+                                },
+                                onValidationClick = { delivery ->
+                                    // Navigate to delivery validation screen
+                                    navController.navigate(Screen.DeliveryValidation.route)
+                                },
+                                onCallClick = { delivery ->
+                                    // Handle call click
+                                    val phoneNumber = delivery.clientPhone
+                                    if (phoneNumber != null) {
+                                        println("📞 APPEL du numéro: $phoneNumber")
+                                        try {
+                                            // Essayer avec ACTION_CALL pour appeler directement
+                                            val callIntent = android.content.Intent(android.content.Intent.ACTION_CALL).apply {
+                                                data = android.net.Uri.parse("tel:$phoneNumber")
+                                            }
+                                            ContextCompat.startActivity(this@MainActivity, callIntent, null)
+                                        } catch (e: Exception) {
+                                            try {
+                                                // Fallback: ACTION_DIAL pour ouvrir l'application téléphone
+                                                val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                                    data = android.net.Uri.parse("tel:$phoneNumber")
+                                                }
+                                                ContextCompat.startActivity(this@MainActivity, dialIntent, null)
+                                            } catch (e2: Exception) {
+                                                // Dernier recours: copier le numéro
+                                                val clipboardManager = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                val clip = android.content.ClipData.newPlainText("Phone Number", phoneNumber)
+                                                clipboardManager.setPrimaryClip(clip)
+                                                android.widget.Toast.makeText(
+                                                    this@MainActivity,
+                                                    "Numéro copié: $phoneNumber",
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    } else {
+                                        android.widget.Toast.makeText(
+                                            this@MainActivity,
+                                            "Aucun numéro de téléphone disponible",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                onBackPressed = {
+                                    navController.popBackStack()
+                                }
+                            )
                         }
                         composable(Screen.POD.route) {
                             PODScreen(navController = navController)
@@ -60,6 +117,23 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.TripTest.route) {
                             TripTestScreen(navController = navController)
+                        }
+                        composable(Screen.DeliveryTest.route) {
+                            DeliveryTrackingTestScreen(
+                                onBackPressed = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable(Screen.DateFilterTest.route) {
+                            DateFilterTestScreen(
+                                onBackPressed = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable(Screen.DeliveryValidation.route) {
+                            DeliveryValidationScreen(navController = navController)
                         }
                         composable("${Screen.TripDetail.route}/{tripId}") { backStackEntry ->
                             val tripId = backStackEntry.arguments?.getString("tripId")?.toIntOrNull() ?: 0

@@ -3,6 +3,7 @@ package com.example.delivery.repository
 import com.example.delivery.models.ShipmentSearchResponse
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.ShipmentApiService
+import kotlin.Result
 
 class ShipmentRepository {
     

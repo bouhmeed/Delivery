@@ -6,6 +6,7 @@ import com.example.delivery.models.Shipment
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.TodayTourApiService
 import android.util.Log
+import kotlin.Result
 
 class TodayTourRepository {
     

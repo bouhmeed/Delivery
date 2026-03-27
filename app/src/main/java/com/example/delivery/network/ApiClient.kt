@@ -21,6 +21,10 @@ object ApiClient {
         return instance
     }
     
+    fun getRetrofitInstance(): Retrofit {
+        return instance
+    }
+    
     // Pour débogage - affiche l'URL actuelle
     fun getCurrentUrl(): String = BASE_URL
 }

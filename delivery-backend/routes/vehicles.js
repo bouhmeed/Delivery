@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
       params.push(driverId);
     }
     
-    query += ` ORDER BY "createdAt" DESC LIMIT 100`;
+    query += ` ORDER BY "id" DESC LIMIT 100`;
     
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -42,30 +42,6 @@ router.get('/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error fetching vehicle:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get vehicles by driver ID
-router.get('/', async (req, res) => {
-  try {
-    const { driverId } = req.query;
-    let query = `
-      SELECT * FROM "Vehicle"
-    `;
-    let params = [];
-    
-    if (driverId) {
-      query += ` WHERE "driverId" = $1`;
-      params.push(driverId);
-    }
-    
-    query += ` ORDER BY "createdAt" DESC LIMIT 100`;
-    
-    const result = await pool.query(query, params);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching vehicles:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.delivery.models.ScanResult
 import com.example.delivery.repository.ShipmentRepository
 import kotlinx.coroutines.launch
+import kotlin.Result
 
 class BarcodeScannerViewModel(application: Application) : AndroidViewModel(application) {
     
