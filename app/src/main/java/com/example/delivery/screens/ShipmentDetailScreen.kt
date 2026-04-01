@@ -171,13 +171,18 @@ fun ShipmentDetailScreen(
                         ShipmentInfoRow(
                             icon = Icons.Default.LocationOn,
                             label = "Adresse",
-                            value = shipment.deliveryAddress
+                            value = shipment.deliveryAddress ?: "Adresse non spécifiée"
                         )
                         
                         ShipmentInfoRow(
                             icon = Icons.Default.LocationCity,
                             label = "Ville",
-                            value = "${shipment.deliveryCity} ${shipment.deliveryZipCode}"
+                            value = if (!shipment.deliveryCity.isNullOrEmpty() && !shipment.deliveryZipCode.isNullOrEmpty()) 
+                                "${shipment.deliveryCity} ${shipment.deliveryZipCode}" 
+                            else if (!shipment.deliveryCity.isNullOrEmpty()) 
+                                shipment.deliveryCity 
+                            else 
+                                "Ville non spécifiée"
                         )
                         
                         if (client.phone != null) {

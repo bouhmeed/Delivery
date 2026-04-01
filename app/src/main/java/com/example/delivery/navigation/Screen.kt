@@ -9,10 +9,13 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
     object History : Screen("history")
     object Settings : Screen("settings")
+    object ThemeSettings : Screen("theme_settings")
     object Help : Screen("help")
     object TripTest : Screen("tripTest")
     object TripDetail : Screen("tripDetail")
     object DeliveryTest : Screen("deliveryTest")
     object DateFilterTest : Screen("dateFilterTest")
-    object DeliveryValidation : Screen("deliveryValidation")
+    object DeliveryValidation : Screen("deliveryValidation/{shipmentId}") {
+        fun createRoute(shipmentId: Int) = "deliveryValidation/$shipmentId"
+    }
 }

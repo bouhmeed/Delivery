@@ -180,8 +180,7 @@ fun HomeScreen(navController: NavController) {
                     is TodayTourState.Loading -> {
                         Card(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                                .fillMaxWidth(),
                             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                         ) {
                             Box(
@@ -200,6 +199,7 @@ fun HomeScreen(navController: NavController) {
                         TodayTourCard(
                             tourInfo = currentState.tourInfo,
                             statistics = currentState.statistics,
+                            navController = navController,
                             onStartTour = {
                                 // Naviguer vers l'écran de démarrage de tournée
                                 navController.navigate("tournee")
@@ -218,8 +218,10 @@ fun HomeScreen(navController: NavController) {
                     is TodayTourState.NoTour -> {
                         Card(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                                .fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White
+                            ),
                             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                         ) {
                             Column(
@@ -252,8 +254,7 @@ fun HomeScreen(navController: NavController) {
                     is TodayTourState.Error -> {
                         Card(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                                .fillMaxWidth(),
                             colors = CardDefaults.cardColors(
                                 containerColor = Color(0xFFFFEBEE)
                             )

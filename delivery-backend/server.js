@@ -18,10 +18,16 @@ const tourneeDetailsRoutes = require('./routes/tourneeDetails');
 const progressionRoutes = require('./routes/progression');
 const deliveryTrackingRoutes = require('./routes/delivery-tracking');
 const shipmentDetailsRoutes = require('./routes/shipment-details');
+const deliveryValidationRoutes = require('./routes/delivery-validation');
+const historyRoutes = require('./routes/history');
+const profileRoutes = require('./routes/profile');
+const shipmentTripRoutes = require('./routes/shipment-trip');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Increase body parser limit for large Base64 images
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // API Routes
 app.use('/api/orders', orderRoutes);
@@ -38,6 +44,10 @@ app.use('/api/today-tour', todayTourRoutes);
 app.use('/api/shipment', shipmentSearchRoutes);
 app.use('/api/tournee', tourneeDetailsRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/delivery-validation', deliveryValidationRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/shipment', shipmentTripRoutes); // Pour les expéditions par trip
 app.use('/api', databaseRoutes);
 
 const PORT = process.env.PORT || 3000;

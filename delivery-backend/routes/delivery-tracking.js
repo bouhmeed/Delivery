@@ -65,6 +65,7 @@ router.get('/date', async (req, res) => {
         // Récupérer les livraisons de la tournée
         const deliveriesQuery = `
             SELECT 
+                tsl.id as "tripShipmentLinkId",
                 tsl.sequence,
                 tsl."shipmentId",
                 tsl.status,
@@ -203,6 +204,7 @@ router.get('/today/with-deliveries', async (req, res) => {
             // Récupérer les livraisons de la tournée
             const deliveriesQuery = `
                 SELECT 
+                    tsl.id as tripShipmentLinkId,
                     tsl.sequence,
                     tsl.shipmentId,
                     tsl.status,
@@ -259,6 +261,7 @@ router.get('/:tripId/deliveries', async (req, res) => {
     try {
         const query = `
             SELECT 
+                tsl.id as tripShipmentLinkId,
                 tsl.sequence,
                 tsl.shipmentId,
                 tsl.status,
@@ -316,9 +319,9 @@ router.put('/shipments/:shipmentId/status', async (req, res) => {
     
     try {
         const query = `
-            UPDATE TripShipmentLink 
-            SET status = $1, updatedAt = CURRENT_TIMESTAMP
-            WHERE shipmentId = $2
+            UPDATE "TripShipmentLink" 
+            SET status = $1, "updatedAt" = CURRENT_TIMESTAMP
+            WHERE "shipmentId" = $2
         `;
         
         const result = await pool.query(query, [status, shipmentId]);
@@ -336,10 +339,12 @@ router.put('/shipments/:shipmentId/status', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Erreur dans /api/shipments/:shipmentId/status:', error);
+        console.error('❌ Erreur PUT /shipments/:shipmentId/status:', error.message);
+        console.error('Error stack:', error.stack);
+        console.error('shipmentId:', shipmentId, 'status:', status);
         res.status(500).json({
             success: false,
-            message: 'Erreur serveur'
+            message: 'Erreur serveur: ' + error.message
         });
     }
 });

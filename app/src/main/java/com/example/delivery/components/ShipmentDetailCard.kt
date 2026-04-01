@@ -90,7 +90,7 @@ fun ShipmentDetailCard(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = shipment.origin?.address ?: shipment.deliveryAddress ?: "Adresse non spécifiée",
+                        text = shipment.origin?.address ?: "Adresse non spécifiée",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2
@@ -118,7 +118,7 @@ fun ShipmentDetailCard(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = shipment.destination?.address ?: shipment.deliveryAddress ?: "Adresse non spécifiée",
+                        text = shipment.destination?.address ?: "Adresse non spécifiée",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2

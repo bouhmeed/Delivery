@@ -7,6 +7,7 @@ import com.example.delivery.models.Trip
 import com.example.delivery.models.TripWithDeliveries
 import com.example.delivery.repository.DeliveryTrackingRepository
 import com.example.delivery.repository.Result
+import com.example.delivery.repository.ShipmentRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,7 @@ import java.time.format.DateTimeFormatter
 class DeliveryTrackingViewModel : ViewModel() {
     
     private val repository = DeliveryTrackingRepository()
+    private val shipmentRepository = ShipmentRepository()
     
     // Selected date state
     private val _selectedDate = MutableStateFlow(LocalDate.now())
@@ -161,6 +163,53 @@ class DeliveryTrackingViewModel : ViewModel() {
     }
     
     /**
+     * Update delivery status in TripShipmentLink
+     */
+    fun updateTripShipmentStatus(tripShipmentLinkId: Int, newStatus: String, driverId: Int? = null) {
+        viewModelScope.launch {
+            _operationState.value = OperationState.Loading
+            
+            try {
+                println("🔄 ViewModel: Mise à jour statut livraison $tripShipmentLinkId -> $newStatus")
+                
+                // Convert French status to TripShipmentLink database status
+                val dbStatus = when (newStatus) {
+                    "À planifier" -> "NON_DEMARRE"
+                    "Assigné" -> "ASSIGNED"
+                    "En cours" -> "EN_COURS"
+                    "Terminé" -> "TERMINE"
+                    else -> newStatus
+                }
+                
+                val result = shipmentRepository.updateTripShipmentStatus(tripShipmentLinkId, dbStatus)
+                
+                when {
+                    result.isSuccess -> {
+                        val responseBody = result.getOrNull()
+                        println("✅ ViewModel: Statut mis à jour avec succès")
+                        _operationState.value = OperationState.Success("Statut mis à jour avec succès")
+                        
+                        // Refresh data for current driver if driverId is provided
+                        driverId?.let { refresh(it) }
+                    }
+                    result.isFailure -> {
+                        val exception = result.exceptionOrNull()
+                        println("❌ ViewModel: Erreur mise à jour statut - ${exception?.message}")
+                        _operationState.value = OperationState.Error(
+                            exception?.message ?: "Erreur lors de la mise à jour du statut"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ ViewModel: Exception lors de la mise à jour du statut - ${e.message}")
+                _operationState.value = OperationState.Error(
+                    "Erreur lors de la mise à jour du statut: ${e.message}"
+                )
+            }
+        }
+    }
+    
+    /**
      * Complete delivery
      */
     fun completeDelivery(shipmentId: Int) {
@@ -193,13 +242,13 @@ class DeliveryTrackingViewModel : ViewModel() {
     }
     
     /**
-     * Get delivery statistics
+     * Get delivery statistics from current deliveries
      */
-    fun getDeliveryStats(deliveries: List<DeliveryItem>): DeliveryStats {
+    private fun getDeliveryStats(deliveries: List<DeliveryItem>): DeliveryStats {
         val total = deliveries.size
         val completed = deliveries.count { it.podDone }
         val inProgress = deliveries.count { !it.podDone && it.status == "EN_COURS" }
-        val notStarted = deliveries.count { !it.podDone && it.status == "NON_DEMARRE" }
+        val notStarted = deliveries.count { !it.podDone && (it.status == "NON_DEMARRE" || it.status == "ASSIGNED") }
         
         return DeliveryStats(
             total = total,

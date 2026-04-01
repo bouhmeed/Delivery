@@ -6,7 +6,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,7 +34,7 @@ import com.example.delivery.models.UserResponse
 import com.example.delivery.models.TripHistory
 import com.example.delivery.models.DriverStats
 import com.example.delivery.models.DriverStatsInfo
-import com.example.delivery.models.TripHistoryItem
+import com.example.delivery.models.DeliveryHistoryItem
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.HistoryApiService
 import android.widget.Toast
@@ -35,6 +43,7 @@ import retrofit2.Response
 import java.net.SocketTimeoutException
 import java.net.ConnectException
 import java.net.UnknownHostException
+import androidx.compose.material.icons.filled.Refresh
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,6 +111,32 @@ fun HistoryScreen(navController: NavController) {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
                     }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            userEmail?.let { email ->
+                                userInfo?.driverId?.let { driverId ->
+                                    coroutineScope.launch {
+                                        isLoading = true
+                                        errorMessage = null
+                                        
+                                        loadDriverHistory(historyApi, driverId, { history ->
+                                            driverHistory = history
+                                        }, { error -> errorMessage = error })
+                                        
+                                        loadDriverStats(historyApi, driverId, { stats ->
+                                            driverStats = stats
+                                        }, { error -> errorMessage = error })
+                                        
+                                        isLoading = false
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Actualiser")
+                    }
                 }
             )
         },
@@ -162,16 +197,65 @@ fun HistoryScreen(navController: NavController) {
             
             // History list
             driverHistory?.history?.let { history ->
-                items(history) { trip ->
-                    TripHistoryCard(
-                        trip = trip,
-                        onClick = {
-                            // TODO: Navigate to trip details
-                            Toast.makeText(context, "Détails du trajet ${trip.id}", Toast.LENGTH_SHORT).show()
-                        }
-                    )
+                if (history.isEmpty()) {
+                    item {
+                        EmptyHistoryState()
+                    }
+                } else {
+                    items(
+                        items = history,
+                        key = { it.shipmentId }
+                    ) { delivery ->
+                        DeliveryHistoryCard(
+                            delivery = delivery,
+                            onClick = {
+                                // TODO: Navigate to delivery details
+                                Toast.makeText(context, "Détails de la livraison ${delivery.shipmentNumber}", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun EmptyHistoryState() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                Icons.Default.History,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Text(
+                text = "Aucun historique",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium
+            )
+            
+            Text(
+                text = "Vos livraisons passées apparaîtront ici",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -186,7 +270,7 @@ fun DriverStatsCard(stats: DriverStatsInfo) {
                 shape = RoundedCornerShape(12.dp)
             ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+            containerColor = Color.White
         )
     ) {
         Column(
@@ -222,7 +306,7 @@ fun DriverStatsCard(stats: DriverStatsInfo) {
                 NewStatItem(
                     label = "Succès",
                     value = "${(stats.completedTrips.toFloat() / stats.totalTrips * 100).toInt()}%",
-                    icon = Icons.Default.TrendingUp,
+                    icon = Icons.Default.CheckCircle,
                     color = MaterialTheme.colorScheme.tertiary
                 )
             }
@@ -265,6 +349,9 @@ fun SearchAndFilters(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -280,7 +367,13 @@ fun SearchAndFilters(
                     Icon(Icons.Default.Search, contentDescription = "Recherche")
                 },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    unfocusedBorderColor = Color.Gray,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
+                )
             )
             
             // Period filter
@@ -294,7 +387,7 @@ fun SearchAndFilters(
 }
 
 @Composable
-fun TripHistoryCard(trip: TripHistoryItem, onClick: () -> Unit) {
+fun DeliveryHistoryCard(delivery: DeliveryHistoryItem, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -311,28 +404,80 @@ fun TripHistoryCard(trip: TripHistoryItem, onClick: () -> Unit) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // Header with date and status
+            // Header with shipment number and date
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = formatDate(trip.tripDate),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    trip.vehicleName?.let { vehicle ->
+                    delivery.shipmentNumber?.let { shipmentNo ->
                         Text(
-                            text = "$vehicle • ${trip.licensePlate ?: ""}",
+                            text = shipmentNo,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = formatDate(delivery.tripDate),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    delivery.tripNumber?.let { tripNo ->
+                        Text(
+                            text = "Trajet: $tripNo",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 
-                StatusChip(status = trip.tripStatus)
+                StatusChip(status = delivery.shipmentStatus)
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Client and destination information
+            delivery.clientName?.let { client ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = client,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            // Destination information
+            if (delivery.originName != null && delivery.destinationName != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "${delivery.originName} → ${delivery.destinationName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(12.dp))
@@ -343,19 +488,19 @@ fun TripHistoryCard(trip: TripHistoryItem, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 InfoItem(
-                    icon = Icons.Default.LocalShipping,
-                    label = "Expéditions",
-                    value = trip.shipmentCount.toString()
-                )
-                InfoItem(
                     icon = Icons.Default.Inventory,
-                    label = "Quantité totale",
-                    value = trip.totalQuantity.toString()
+                    label = "Quantité",
+                    value = "${delivery.quantity} ${delivery.uom}"
                 )
                 InfoItem(
-                    icon = Icons.Default.LocationOn,
-                    label = "Statut",
-                    value = getStatusText(trip.tripStatus)
+                    icon = Icons.Default.LocalShipping,
+                    label = "Véhicule",
+                    value = delivery.vehicleName ?: "N/A"
+                )
+                InfoItem(
+                    icon = Icons.Default.CheckCircle,
+                    label = "POD",
+                    value = if (delivery.podDone == true) "Oui" else "Non"
                 )
             }
         }
@@ -363,13 +508,14 @@ fun TripHistoryCard(trip: TripHistoryItem, onClick: () -> Unit) {
 }
 
 @Composable
-fun StatusChip(status: String) {
-    val (color, text) = when (status.uppercase()) {
-        "COMPLETED" -> MaterialTheme.colorScheme.primary to "Terminé"
-        "IN_PROGRESS" -> MaterialTheme.colorScheme.secondary to "En cours"
-        "PLANNING" -> MaterialTheme.colorScheme.tertiary to "Planifié"
+fun StatusChip(status: String?) {
+    val statusUpper = status?.uppercase() ?: "UNKNOWN"
+    val (color, text) = when (statusUpper) {
+        "DELIVERED", "COMPLETED" -> MaterialTheme.colorScheme.primary to "Livré"
+        "EXPEDITION" -> MaterialTheme.colorScheme.secondary to "Expédié"
+        "TO_PLAN" -> MaterialTheme.colorScheme.tertiary to "À planifier"
         "CANCELLED" -> MaterialTheme.colorScheme.error to "Annulé"
-        else -> MaterialTheme.colorScheme.surfaceVariant to status
+        else -> MaterialTheme.colorScheme.surfaceVariant to (status ?: "Inconnu")
     }
     
     Surface(
@@ -425,13 +571,14 @@ private fun formatDate(dateString: String): String {
     }
 }
 
-private fun getStatusText(status: String): String {
-    return when (status.uppercase()) {
-        "COMPLETED" -> "Terminé"
-        "IN_PROGRESS" -> "En cours"
-        "PLANNING" -> "Planifié"
+private fun getStatusText(status: String?): String {
+    val statusUpper = status?.uppercase() ?: "UNKNOWN"
+    return when (statusUpper) {
+        "DELIVERED", "COMPLETED" -> "Livré"
+        "EXPEDITION" -> "Expédié"
+        "TO_PLAN" -> "À planifier"
         "CANCELLED" -> "Annulé"
-        else -> status
+        else -> status ?: "Inconnu"
     }
 }
 

@@ -4,7 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -24,8 +24,7 @@ fun QuickActionsCard(
 ) {
     Card(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+            .fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -43,8 +42,8 @@ fun QuickActionsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "⚡ Actions Rapides",
-                    fontSize = 18.sp,
+                    text = "Vérification d'Assignation de Produit",
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1976D2),
                     modifier = Modifier.weight(1f)
@@ -70,22 +69,22 @@ fun QuickActionsCard(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CameraAlt,
+                            imageVector = Icons.Default.QrCodeScanner,
                             contentDescription = "Scanner",
                             tint = Color.White,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "📸 Scanner code",
+                            text = "Scanner Code",
                             color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -106,22 +105,22 @@ fun QuickActionsCard(
                         Color(0xFF1976D2)
                     )
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Entrer manuellement",
+                            contentDescription = "Entrée manuelle",
                             tint = Color(0xFF1976D2),
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "✍️ Entrer manuellement",
+                            text = "Entrer Manuellement",
                             color = Color(0xFF1976D2),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center
                         )
                     }

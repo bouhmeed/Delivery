@@ -71,10 +71,10 @@ data class DeliveryItem(
     val podDone: Boolean,
     val shipmentNo: String,
     val destinationId: Int,
-    val deliveryAddress: String,
-    val deliveryCity: String,
-    val deliveryZipCode: String,
-    val deliveryCountry: String,
+    val deliveryAddress: String?,
+    val deliveryCity: String?,
+    val deliveryZipCode: String?,
+    val deliveryCountry: String?,
     val clientName: String?,
     val clientPhone: String?,
     val fullAddress: String?,
@@ -85,7 +85,8 @@ data class DeliveryItem(
     val description: String,
     val quantity: Int,
     val uom: String,
-    val tripIdentifier: String? = null // Added for display purposes
+    val tripIdentifier: String? = null, // Added for display purposes
+    val tripShipmentLinkId: Int? = null // ID du TripShipmentLink pour les mises à jour de statut
 )
 
 // Trip with Deliveries Response

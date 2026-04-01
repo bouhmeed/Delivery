@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.example.delivery.models.TourInfo
 import com.example.delivery.models.TourStatistics
 
@@ -27,6 +28,7 @@ import com.example.delivery.models.TourStatistics
 fun TodayTourCard(
     tourInfo: TourInfo,
     statistics: TourStatistics,
+    navController: NavController? = null,
     modifier: Modifier = Modifier,
     onStartTour: () -> Unit = {},
     onViewDetails: () -> Unit = {},
@@ -41,8 +43,7 @@ fun TodayTourCard(
 
     Card(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+            .fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -210,93 +211,48 @@ fun TodayTourCard(
             // Section Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                when (tourInfo.status) {
-                    "PLANNED" -> {
-                        Button(
-                            onClick = onStartTour,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1976D2)
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Démarrer")
-                        }
-                    }
-                    "IN_PROGRESS" -> {
-                        Button(
-                            onClick = onViewDetails,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1976D2)
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Map,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Détails")
-                        }
-                    }
-                    "COMPLETED" -> {
-                        Button(
-                            onClick = onViewDetails,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF4CAF50)
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AssignmentTurnedIn,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Rapport")
-                        }
-                    }
-                    else -> {
-                        Button(
-                            onClick = onViewDetails,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF1976D2)
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Détails")
-                        }
-                    }
-                }
-                
-                OutlinedButton(
-                    onClick = onViewDetails,
+                Button(
+                    onClick = {
+                        // Naviguer vers le suivi des tournées avec la date spécifique de la tournée
+                        navController?.navigate("delivery?date=${tourInfo.date.substring(0, 10)}")
+                    },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF1976D2)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1976D2)
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.List,
-                        contentDescription = null,
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Validé",
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Liste")
+                    Text("Validée")
+                }
+                
+                OutlinedButton(
+                    onClick = {
+                        // Naviguer vers les détails du trajet
+                        navController?.navigate("tripDetail/${tourInfo.id}")
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF1976D2)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        Color(0xFF1976D2)
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Détail",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Détail")
                 }
             }
         }

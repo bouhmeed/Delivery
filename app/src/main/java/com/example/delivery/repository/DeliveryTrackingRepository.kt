@@ -3,7 +3,7 @@ package com.example.delivery.repository
 import com.example.delivery.models.*
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.DeliveryTrackingApiService
-import com.example.delivery.models.StatusUpdateRequest
+import com.example.delivery.network.StatusUpdateRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import retrofit2.Response

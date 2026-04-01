@@ -160,7 +160,12 @@ fun DeliveryTrackingScreen(
                             onCompleteDelivery = { delivery ->
                                 viewModel.completeDelivery(delivery.shipmentId)
                             },
-                            onNavigateToDetails = onNavigateToDelivery
+                            onNavigateToDetails = onNavigateToDelivery,
+                            onStatusChange = { delivery, newStatus ->
+                                // Utiliser le tripShipmentLinkId si disponible, sinon le shipmentId
+                                val tripShipmentLinkId = delivery.tripShipmentLinkId ?: delivery.shipmentId
+                                viewModel.updateTripShipmentStatus(tripShipmentLinkId, newStatus, driverId)
+                            }
                         )
                     }
                 }
@@ -207,7 +212,8 @@ private fun TripContent(
     onValidationClick: (DeliveryItem) -> Unit,
     onCallClick: (DeliveryItem) -> Unit,
     onCompleteDelivery: (DeliveryItem) -> Unit,
-    onNavigateToDetails: (DeliveryItem) -> Unit
+    onNavigateToDetails: (DeliveryItem) -> Unit,
+    onStatusChange: (DeliveryItem, String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -221,7 +227,7 @@ private fun TripContent(
                     total = deliveries.size,
                     completed = deliveries.count { it.podDone },
                     inProgress = deliveries.count { !it.podDone && it.status == "EN_COURS" },
-                    notStarted = deliveries.count { !it.podDone && it.status == "NON_DEMARRE" },
+                    notStarted = deliveries.count { !it.podDone && (it.status == "NON_DEMARRE" || it.status == "ASSIGNED") },
                     completionPercentage = if (deliveries.isNotEmpty()) {
                         (deliveries.count { it.podDone } * 100 / deliveries.size)
                     } else {
@@ -239,7 +245,8 @@ private fun TripContent(
                 onCompleteClick = onCompleteDelivery,
                 onNavigateClick = onNavigateToMap,
                 onValidationClick = onValidationClick,
-                onCallClick = onCallClick
+                onCallClick = onCallClick,
+                onStatusChange = onStatusChange
             )
         }
     }
@@ -393,11 +400,25 @@ fun DeliveryTrackingScreenWithDetails(
     onValidationClick: (DeliveryItem) -> Unit = {},
     onCallClick: (DeliveryItem) -> Unit = {},
     navController: NavController = rememberNavController(),
-    viewModel: DeliveryTrackingViewModel = viewModel()
+    viewModel: DeliveryTrackingViewModel = viewModel(),
+    selectedDate: String? = null
 ) {
     // État pour gérer l'affichage des détails de livraison
     var showShipmentDetails by remember { mutableStateOf(false) }
     var selectedShipmentId by remember { mutableIntStateOf(0) }
+    
+    // Si une date spécifique est fournie, la définir dans le ViewModel
+    LaunchedEffect(selectedDate) {
+        selectedDate?.let { dateString ->
+            try {
+                val localDate = LocalDate.parse(dateString)
+                viewModel.setSelectedDate(localDate)
+            } catch (e: Exception) {
+                // En cas d'erreur de parsing, utiliser la date du jour
+                println("Erreur de parsing de la date: $dateString")
+            }
+        }
+    }
     
     // Fonction pour naviguer vers les détails
     val handleNavigateToDelivery: (DeliveryItem) -> Unit = { delivery ->

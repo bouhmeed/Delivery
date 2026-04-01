@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,7 +16,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.delivery.components.*
-import com.example.delivery.models.UserResponse
+import com.example.delivery.auth.AuthManager
+import com.example.delivery.network.UserApiService
+import com.example.delivery.network.ApiClient
 import com.example.delivery.viewmodel.ProgressionViewModel
 import com.example.delivery.viewmodel.ProgressionUiState
 import kotlinx.coroutines.launch
@@ -28,27 +31,32 @@ fun TourneeProgressionScreen(
     val uiState by progressionViewModel.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    val userApiService = remember { ApiClient.instance.create(UserApiService::class.java) }
     
-    // Mock current driver - in real app, get from auth/session
-    val currentDriver = remember { 
-        UserResponse(
-            id = "5",
-            tenantId = "1",
-            email = "driver@example.com",
-            firstName = "Pierre",
-            lastName = "Bernard",
-            driverId = "5",
-            role = "DRIVER",
-            isActive = true,
-            createdAt = "2026-03-26T10:00:00Z",
-            updatedAt = "2026-03-26T10:00:00Z"
-        )
-    }
+    // Real current driver from auth
+    var currentDriver by remember { mutableStateOf<com.example.delivery.models.UserResponse?>(null) }
+    var isLoadingDriver by remember { mutableStateOf(true) }
     
-    // Set driver ID when screen loads
-    LaunchedEffect(currentDriver) {
-        currentDriver.driverId?.let { driverId ->
-            progressionViewModel.setDriverId(driverId.toInt())
+    // Load real driver data
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            try {
+                val userEmail = authManager.getUserEmail()
+                if (userEmail != null) {
+                    val response = userApiService.getUserByEmail(userEmail)
+                    if (response.isSuccessful) {
+                        currentDriver = response.body()
+                        currentDriver?.driverId?.let { driverId ->
+                            progressionViewModel.setDriverId(driverId.toInt())
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Handle error
+            } finally {
+                isLoadingDriver = false
+            }
         }
     }
     
@@ -56,6 +64,59 @@ fun TourneeProgressionScreen(
     // Pas de header - contenu direct dans la Card parente blanche
     
     Spacer(modifier = Modifier.height(12.dp))
+    
+    // Show loading while driver data is being fetched
+    if (isLoadingDriver) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Chargement du profil...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        return
+    }
+    
+    // Show error if no driver found
+    if (currentDriver == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = "Aucun chauffeur",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Aucun chauffeur trouvé",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+        return
+    }
     
     // Progression Section
     val currentState = uiState

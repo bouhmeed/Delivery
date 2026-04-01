@@ -27,11 +27,11 @@ data class ShipmentSearchDetail(
     val description: String,
     val quantity: Int,
     @SerializedName("deliveryAddress")
-    val deliveryAddress: String,
+    val deliveryAddress: String?,
     @SerializedName("deliveryCity")
-    val deliveryCity: String,
+    val deliveryCity: String?,
     @SerializedName("deliveryZipCode")
-    val deliveryZipCode: String,
+    val deliveryZipCode: String?,
     @SerializedName("customerId")
     val customerId: Int,
     val priority: String,

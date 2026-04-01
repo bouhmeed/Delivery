@@ -37,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeliveryItemCard(
     delivery: DeliveryItem,
@@ -45,10 +46,32 @@ fun DeliveryItemCard(
     onCompleteClick: (DeliveryItem) -> Unit = {},
     onNavigateClick: (DeliveryItem) -> Unit = {},
     onValidationClick: (DeliveryItem) -> Unit = {},
-    onCallClick: (DeliveryItem) -> Unit = {}
+    onCallClick: (DeliveryItem) -> Unit = {},
+    onStatusChange: (DeliveryItem, String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var isPressed by remember { mutableStateOf(false) }
+    
+    // États pour la liste déroulante de statuts
+    var expandedStatus by remember { mutableStateOf(false) }
+    val statusOptions = listOf("À planifier", "Assigné", "En cours", "Terminé")
+    var selectedStatus by remember { mutableStateOf(
+        when {
+            delivery.podDone -> "Terminé"
+            delivery.status == "EN_COURS" -> "En cours"
+            delivery.status == "ASSIGNED" -> "Assigné"
+            else -> "À planifier"
+        }
+    ) }
+    
+    // Log pour déboguer
+    println("🔍 DEBUG: delivery.podDone = ${delivery.podDone}, delivery.status = '${delivery.status}', selectedStatus = '$selectedStatus'")
+    
+    // État de chargement pour la mise à jour du statut
+    var isUpdatingStatus by remember { mutableStateOf(false) }
+    
+    // Animation pour le clic
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = spring(
@@ -180,28 +203,39 @@ fun DeliveryItemCard(
                         color = statusColor.copy(alpha = 0.5f)
                     )
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(
-                                    statusColor,
-                                    RoundedCornerShape(4.dp)
-                                )
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(
+                                        statusColor,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                            )
+                            Text(
+                                text = when {
+                                    delivery.podDone -> "Terminé"
+                                    delivery.status == "EN_COURS" -> "En cours"
+                                    else -> "À faire"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = statusColor
+                            )
+                        }
+                        // Raw DB status
                         Text(
-                            text = when {
-                                delivery.podDone -> "Terminé"
-                                delivery.status == "EN_COURS" -> "En cours"
-                                else -> "À faire"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = statusColor
+                            text = delivery.status.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = statusColor.copy(alpha = 0.8f)
                         )
                     }
                 }
@@ -258,7 +292,7 @@ fun DeliveryItemCard(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = delivery.deliveryAddress,
+                            text = delivery.fullAddress ?: "Adresse non spécifiée",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF333333),
                             fontWeight = FontWeight.Medium,
@@ -266,7 +300,7 @@ fun DeliveryItemCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${delivery.deliveryCity} ${delivery.deliveryZipCode}",
+                            text = "${delivery.locationCity ?: "Ville inconnue"} ${delivery.locationPostalCode ?: "00000"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF666666)
                         )
@@ -370,6 +404,98 @@ fun DeliveryItemCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
+            // Liste déroulante de statuts
+            ExposedDropdownMenuBox(
+                expanded = expandedStatus,
+                onExpandedChange = { expandedStatus = it },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = selectedStatus,
+                    onValueChange = { },
+                    readOnly = true,
+                    label = { Text("Statut") },
+                    trailingIcon = { 
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (isUpdatingStatus) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedStatus)
+                            }
+                        }
+                    },
+                    enabled = !isUpdatingStatus,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                
+                DropdownMenu(
+                    expanded = expandedStatus,
+                    onDismissRequest = { expandedStatus = false },
+                    modifier = Modifier.exposedDropdownSize(),
+                    containerColor = Color.White
+                ) {
+                    statusOptions.forEach { status ->
+                        DropdownMenuItem(
+                            text = { 
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (isUpdatingStatus && selectedStatus == status) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(status)
+                                }
+                            },
+                            onClick = {
+                                if (!isUpdatingStatus && status != selectedStatus) {
+                                    // Validation des transitions de statut
+                                    val isValidTransition = when {
+                                        selectedStatus == "Terminé" && status != "Terminé" -> false // On ne peut pas revenir de "Terminé"
+                                        else -> true
+                                    }
+                                    
+                                    if (isValidTransition) {
+                                        isUpdatingStatus = true
+                                        selectedStatus = status
+                                        expandedStatus = false
+                                        
+                                        println("🔄 Changement de statut: ${delivery.shipmentNo} -> $status")
+                                        
+                                        // Appeler le callback pour mettre à jour le statut
+                                        onStatusChange(delivery, status)
+                                        
+                                        // Simuler la fin de la mise à jour (sera géré par le ViewModel)
+                                        scope.launch {
+                                            delay(2000) // Timeout de sécurité
+                                            isUpdatingStatus = false
+                                        }
+                                    } else {
+                                        println("⚠️ Transition de statut invalide: $selectedStatus -> $status")
+                                    }
+                                }
+                            },
+                            enabled = !isUpdatingStatus
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
             // Action buttons with enhanced design and consistent sizing
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -385,9 +511,9 @@ fun DeliveryItemCard(
                         onClick = { 
                             println("🗺️ Bouton Itinéraire cliqué!")
                             openTomTomMaps(
-                                delivery.deliveryAddress ?: "Adresse inconnue",
-                                delivery.deliveryCity ?: "Ville inconnue", 
-                                delivery.deliveryZipCode ?: "00000"
+                                delivery.fullAddress ?: "Adresse inconnue",
+                                delivery.locationCity ?: "Ville inconnue", 
+                                delivery.locationPostalCode ?: "00000"
                             )
                         },
                         modifier = Modifier
@@ -426,36 +552,39 @@ fun DeliveryItemCard(
                         }
                     }
                     
-                    // Validation button - Primary blue
-                    Button(
-                        onClick = { 
-                            println("✅ Bouton Validation cliqué!")
-                            onValidationClick(delivery)
-                        },
-                        modifier = Modifier
-                            .weight(1.2f)  // Plus d'espace pour le texte plus long
-                            .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
-                        shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = DesignSystem.Colors.VALIDATION_BLUE,
-                            contentColor = DesignSystem.Colors.SURFACE_WHITE
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = DesignSystem.Components.BUTTON_ELEVATION,
-                            pressedElevation = DesignSystem.Components.BUTTON_ELEVATION_PRESSED
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Verified,
-                            contentDescription = "Validation",
-                            modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
-                        )
-                        Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_MINI))
-                        Text(
-                            text = "Validation",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                    // Validation button - Primary blue (uniquement si "Terminé" est sélectionné)
+                    println("🔍 DEBUG: selectedStatus = '$selectedStatus', podDone = ${delivery.podDone}")
+                    if (selectedStatus == "Terminé") {
+                        Button(
+                            onClick = { 
+                                println("✅ Bouton Validation cliqué!")
+                                onValidationClick(delivery)
+                            },
+                            modifier = Modifier
+                                .weight(1.2f)  // Plus d'espace pour le texte plus long
+                                .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
+                            shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = DesignSystem.Colors.VALIDATION_BLUE,
+                                contentColor = DesignSystem.Colors.SURFACE_WHITE
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = DesignSystem.Components.BUTTON_ELEVATION,
+                                pressedElevation = DesignSystem.Components.BUTTON_ELEVATION_PRESSED
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "Validation",
+                                modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
+                            )
+                            Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_MINI))
+                            Text(
+                                text = "Validation",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                     
                     // Complete button - Success green with disabled state

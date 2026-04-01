@@ -194,9 +194,10 @@ fun NewShipmentDetailScreen(
                         onMarkAsDelivered = { viewModel.completeShipment(shipmentId) },
                         onNavigateToMap = { 
                             println("🗺️ ON_NAVIGATE_TO_MAP APPELÉ!")
-                            state.data.deliveryAddress?.let { address ->
-                                state.data.deliveryCity?.let { city ->
-                                    state.data.deliveryZipCode?.let { zipCode ->
+                            val destination = state.data.destination
+                            destination?.address?.let { address ->
+                                destination?.city?.let { city ->
+                                    destination?.postalCode?.let { zipCode ->
                                         println("🗺️ APPEL DE openTomTomMaps avec: $address, $city, $zipCode")
                                         openTomTomMaps(address, city, zipCode)
                                     } ?: run {
@@ -365,7 +366,8 @@ private fun ShipmentDetailContent(
         }
         
         // Carte d'adresse de livraison
-        if (shipment.deliveryAddress != null) {
+        val destination = shipment.destination
+        if (destination != null) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -390,13 +392,13 @@ private fun ShipmentDetailContent(
                     NewShipmentInfoRow(
                         icon = Icons.Default.LocationOn,
                         label = "Adresse",
-                        value = shipment.deliveryAddress ?: "N/A"
+                        value = destination.address ?: "N/A"
                     )
                     
                     NewShipmentInfoRow(
                         icon = Icons.Default.LocationCity,
                         label = "Ville",
-                        value = "${shipment.deliveryCity ?: ""} ${shipment.deliveryZipCode ?: ""}"
+                        value = "${destination.city ?: ""} ${destination.postalCode ?: ""}"
                     )
                     
                     // Afficher les informations du client si disponibles

@@ -54,8 +54,69 @@ class MainActivity : ComponentActivity() {
                                     // You can implement map navigation here
                                 },
                                 onValidationClick = { delivery ->
-                                    // Navigate to delivery validation screen
-                                    navController.navigate(Screen.DeliveryValidation.route)
+                                    // Navigate to delivery validation screen with shipmentId
+                                    navController.navigate(Screen.DeliveryValidation.createRoute(delivery.shipmentId))
+                                },
+                                onCallClick = { delivery ->
+                                    // Handle call click
+                                    val phoneNumber = delivery.clientPhone
+                                    if (phoneNumber != null) {
+                                        println("📞 APPEL du numéro: $phoneNumber")
+                                        try {
+                                            // Essayer avec ACTION_CALL pour appeler directement
+                                            val callIntent = android.content.Intent(android.content.Intent.ACTION_CALL).apply {
+                                                data = android.net.Uri.parse("tel:$phoneNumber")
+                                            }
+                                            ContextCompat.startActivity(this@MainActivity, callIntent, null)
+                                        } catch (e: Exception) {
+                                            try {
+                                                // Fallback: ACTION_DIAL pour ouvrir l'application téléphone
+                                                val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                                    data = android.net.Uri.parse("tel:$phoneNumber")
+                                                }
+                                                ContextCompat.startActivity(this@MainActivity, dialIntent, null)
+                                            } catch (e2: Exception) {
+                                                // Dernier recours: copier le numéro
+                                                val clipboardManager = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                val clip = android.content.ClipData.newPlainText("Phone Number", phoneNumber)
+                                                clipboardManager.setPrimaryClip(clip)
+                                                android.widget.Toast.makeText(
+                                                    this@MainActivity,
+                                                    "Numéro copié: $phoneNumber",
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    } else {
+                                        android.widget.Toast.makeText(
+                                            this@MainActivity,
+                                            "Aucun numéro de téléphone disponible",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                onBackPressed = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable("delivery?date={date}") { backStackEntry ->
+                            val date = backStackEntry.arguments?.getString("date")
+                            DeliveryTrackingScreenWithDetails(
+                                driverId = 5, // Change to 5 for testing, or get from user session
+                                navController = navController,
+                                selectedDate = date, // Passer la date spécifique
+                                onNavigateToDelivery = { delivery ->
+                                    // Navigate to delivery details if needed
+                                    navController.navigate("order_details/${delivery.shipmentId}")
+                                },
+                                onNavigateToMap = { delivery ->
+                                    // Open maps with delivery address
+                                    // You can implement map navigation here
+                                },
+                                onValidationClick = { delivery ->
+                                    // Navigate to delivery validation screen with shipmentId
+                                    navController.navigate(Screen.DeliveryValidation.createRoute(delivery.shipmentId))
                                 },
                                 onCallClick = { delivery ->
                                     // Handle call click
@@ -104,13 +165,16 @@ class MainActivity : ComponentActivity() {
                             PODScreen(navController = navController)
                         }
                         composable(Screen.Profile.route) {
-                            SettingsScreen(navController = navController)
+                            ProfileScreen(navController = navController)
                         }
                         composable(Screen.History.route) {
-                            DeliveryHistoryScreen(navController = navController)
+                            HistoryScreen(navController = navController)
                         }
                         composable(Screen.Settings.route) {
                             SettingsScreen(navController = navController)
+                        }
+                        composable(Screen.ThemeSettings.route) {
+                            ThemeSettingsScreen(navController = navController)
                         }
                         composable("order_details/{orderId}") { backStackEntry ->
                             OrderDetailsScreen(navController = navController)
@@ -132,8 +196,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
-                        composable(Screen.DeliveryValidation.route) {
-                            DeliveryValidationScreen(navController = navController)
+                        composable(
+                            route = Screen.DeliveryValidation.route,
+                            arguments = listOf(
+                                androidx.navigation.navArgument("shipmentId") {
+                                    type = androidx.navigation.NavType.IntType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val shipmentId = backStackEntry.arguments?.getInt("shipmentId")
+                            DeliveryValidationScreen(
+                                navController = navController,
+                                shipmentId = shipmentId
+                            )
                         }
                         composable("${Screen.TripDetail.route}/{tripId}") { backStackEntry ->
                             val tripId = backStackEntry.arguments?.getString("tripId")?.toIntOrNull() ?: 0

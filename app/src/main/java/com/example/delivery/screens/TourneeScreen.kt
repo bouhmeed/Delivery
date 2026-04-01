@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,13 +38,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
+import com.example.delivery.components.TripSearchBar
 import com.example.delivery.navigation.Screen
-import com.example.delivery.data.DeliveryData
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.TripApiService
 import com.example.delivery.network.UserApiService
 import com.example.delivery.network.VehicleApiService
 import com.example.delivery.network.DriverApiService
+import com.example.delivery.network.ShipmentApiService
 import com.example.delivery.auth.AuthManager
 import com.example.delivery.models.UserResponse
 import com.example.delivery.models.Vehicle
@@ -56,9 +58,6 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-// Classes de données pour la compatibilité (remplacées par DeliveryData)
-typealias TourInfo = com.example.delivery.data.TourInfo
-typealias ExpeditionInfo = com.example.delivery.data.ExpeditionInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,11 +68,16 @@ fun TourneeScreen(navController: NavController) {
     val userApiService = ApiClient.instance.create(UserApiService::class.java)
     val vehicleApiService = ApiClient.instance.create(VehicleApiService::class.java)
     val driverApiService = ApiClient.instance.create(DriverApiService::class.java)
+    val shipmentApiService = ApiClient.instance.create(ShipmentApiService::class.java)
     val authManager = remember { AuthManager(context) }
     
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var currentMonth by remember { mutableStateOf(YearMonth.from(LocalDate.now())) }
     var showStats by remember { mutableStateOf(false) }
+    
+    // États pour la recherche
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
         
     // États pour les données Trip et User
     var trips by remember { mutableStateOf<List<Trip>>(emptyList()) }
@@ -81,6 +85,10 @@ fun TourneeScreen(navController: NavController) {
     var tripError by remember { mutableStateOf<String?>(null) }
     var currentDriver by remember { mutableStateOf<UserResponse?>(null) }
     var isLoadingUser by remember { mutableStateOf(false) }
+    
+    // États pour les expéditions
+    var tripShipments by remember { mutableStateOf<Map<Int, List<com.example.delivery.models.ShipmentSearchDetail>>>(emptyMap()) }
+    var isLoadingShipments by remember { mutableStateOf(false) }
     
     // Cache pour les véhicules et chauffeurs
     var vehicleCache by remember { mutableStateOf<Map<String, Vehicle>>(emptyMap()) }
@@ -93,6 +101,44 @@ fun TourneeScreen(navController: NavController) {
     
     fun addToDriverCache(id: String, driver: Driver) {
         driverCache = driverCache + (id to driver)
+    }
+    
+    // Fonction pour charger les expéditions d'un trip
+    fun loadTripShipments(tripId: Int) {
+        if (!tripShipments.containsKey(tripId)) {
+            coroutineScope.launch {
+                try {
+                    val response: Response<List<com.example.delivery.models.ShipmentSearchDetail>> = shipmentApiService.getShipmentsByTrip(tripId)
+                    if (response.isSuccessful) {
+                        val rawShipments = response.body() ?: emptyList()
+                        // Mapper la réponse brute vers ShipmentSearchDetail
+                        val mappedShipments = rawShipments.map { raw ->
+                            com.example.delivery.models.ShipmentSearchDetail(
+                                id = raw.id,
+                                shipmentNo = raw.shipmentNo,
+                                trackingNumber = raw.trackingNumber,
+                                status = raw.status,
+                                description = raw.description ?: "",
+                                quantity = 1, // Valeur par défaut
+                                deliveryAddress = "", // Valeur par défaut
+                                deliveryCity = raw.deliveryCity ?: "",
+                                deliveryZipCode = "", // Valeur par défaut
+                                customerId = 0, // Valeur par défaut
+                                priority = "NORMAL", // Valeur par défaut
+                                plannedStart = null,
+                                plannedEnd = null
+                            )
+                        }
+                        tripShipments = tripShipments + (tripId to mappedShipments)
+                        Toast.makeText(context, "✅ ${mappedShipments.size} expéditions chargées pour trip $tripId", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "❌ Erreur chargement expéditions trip $tripId: ${response.code()}", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "❌ Exception chargement expéditions trip $tripId: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
     
     // Fonction pour charger les trips du driver connecté
@@ -177,11 +223,21 @@ fun TourneeScreen(navController: NavController) {
         }
     }
     
-    // Filtrer les trips par date sélectionnée
-    val tripsForSelectedDate = remember(trips, selectedDate) {
+    // Filtrer les trips par date sélectionnée ET recherche
+    val tripsForSelectedDate = remember(trips, selectedDate, searchQuery) {
         trips.filter { trip ->
             val tripDate = getTripDate(trip)
-            tripDate == selectedDate
+            val matchesDate = tripDate == selectedDate
+            val matchesSearch = if (searchQuery.isBlank()) {
+                true
+            } else {
+                // Rechercher dans tripId, statut, et autres champs pertinents
+                val query = searchQuery.lowercase()
+                (trip.tripId?.lowercase()?.contains(query) == true) ||
+                (trip.status?.lowercase()?.contains(query) == true) ||
+                (trip.id.toString().contains(query))
+            }
+            matchesDate && matchesSearch
         }
     }
     
@@ -193,19 +249,9 @@ fun TourneeScreen(navController: NavController) {
             .mapKeys { it.key!! }
     }
     
-    // Utiliser les données partagées
-    val todayTour = DeliveryData.todayTour
-    val allTours = remember { listOf(todayTour) }
-    
-    // Remplacer les données simulées par les données réelles des trips
+    // Utiliser uniquement les données réelles des trips
     val realToursByDate = remember(tripsByDate) {
         tripsByDate
-    }
-    
-    val toursByLocation = remember {
-        mapOf(
-            todayTour.city to todayTour.expeditionCount
-        )
     }
     
     Scaffold(
@@ -240,6 +286,13 @@ fun TourneeScreen(navController: NavController) {
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
+        // Précharger les expéditions pour les trips affichés
+        LaunchedEffect(tripsForSelectedDate) {
+            tripsForSelectedDate.forEach { trip ->
+                loadTripShipments(trip.id.toInt())
+            }
+        }
+        
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -248,7 +301,7 @@ fun TourneeScreen(navController: NavController) {
                 .padding(top = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // En-tête avec calendrier et filtres
+            // En-tête avec calendrier uniquement
             item {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -264,25 +317,52 @@ fun TourneeScreen(navController: NavController) {
                 }
             }
             
-            // Box pour les informations Trip
+            // Barre de recherche
             item {
-                TripInfoBox(
-                    trips = trips,
-                    isLoading = isLoadingTrips || isLoadingUser,
-                    error = tripError,
-                    onRefresh = { refreshTrips() }
+                TripSearchBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = { searchQuery = it },
+                    onSearchActiveChange = { isSearchActive = it },
+                    onClearSearch = { searchQuery = "" },
+                    placeholder = "Rechercher un trip..."
                 )
             }
             
-            // Trips du jour sélectionné
+            // Trips du jour sélectionné avec résultats de recherche
             item {
-                Text(
-                    text = "Trips du ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${selectedDate.year}",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Trips du ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${selectedDate.year}",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        
+                        if (searchQuery.isNotBlank()) {
+                            Text(
+                                text = "${tripsForSelectedDate.size} résultat(s)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    
+                    if (searchQuery.isNotBlank()) {
+                        Text(
+                            text = "Recherche: '$searchQuery'",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                }
             }
             
             // Afficher les trips du jour sélectionné
@@ -297,9 +377,14 @@ fun TourneeScreen(navController: NavController) {
                         onVehicleLoaded = { id, vehicle -> addToVehicleCache(id, vehicle) },
                         onDriverLoaded = { id, driver -> addToDriverCache(id, driver) },
                         onTripClick = { tripId -> 
-                            val tripIdInt = tripId.toIntOrNull() ?: 0
-                            navController.navigate("${Screen.TripDetail.route}/$tripIdInt")
-                        }
+                            // Naviguer vers le suivi des tournées avec la date spécifique de la tournée
+                            val tripDateFormatted = trip.tripDate.substring(0, 10) // Extraire YYYY-MM-DD
+                            navController.navigate("delivery?date=$tripDateFormatted")
+                        },
+                        shipmentApiService = shipmentApiService,
+                        tripShipments = tripShipments,
+                        onLoadShipments = { tripId -> loadTripShipments(tripId) },
+                        navController = navController
                     )
                 }
             } else if (!isLoadingTrips && !isLoadingUser && tripError == null) {
@@ -344,159 +429,6 @@ fun TourneeScreen(navController: NavController) {
     }
 }
 
-// Nouveaux composants pour la tournée
-@Composable
-fun TourInfoCard(currentTour: TourInfo) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(6.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            // Ville en haut
-            Text(
-                text = currentTour.city,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Nombre d'expéditions
-            Text(
-                text = "${currentTour.expeditionCount} expéditions dans cette ville",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            // Informations chauffeur et véhicule
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                // Nom du chauffeur
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "Chauffeur",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = currentTour.driverName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                
-                Spacer(modifier = Modifier.width(16.dp))
-                
-                // Véhicule
-                Column(
-                    modifier = Modifier.weight(1.5f)
-                ) {
-                    Text(
-                        text = "Véhicule",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = currentTour.vehicle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ExpeditionCard(expedition: ExpeditionInfo) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(12.dp))
-            .clickable { /* Navigation vers détails de l'expédition */ },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // En-tête avec ID et destination
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = expedition.id,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                
-                Text(
-                    text = expedition.destination,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Détails de l'expédition
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Volume et poids
-                Column {
-                    Text(
-                        text = expedition.volume,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = expedition.weight,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                
-                // Temps estimé
-                Text(
-                    text = expedition.estimatedTime,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-        }
-    }
-}
 
 // Composants pour le calendrier des tournées
 @Composable
@@ -720,391 +652,83 @@ fun TourneeCalendarDay(
     }
 }
 
+
+
+
+// Composant pour afficher une expédition
 @Composable
-fun DaySummaryCard(
-    selectedDate: LocalDate,
-    allTours: List<TourInfo>,
-    toursByDate: Map<LocalDate, Int>
-) {
-    val totalExpeditions = allTours.sumOf { it.expeditionCount }
-    val totalTours = allTours.size
-    val dayTourCount = toursByDate[selectedDate] ?: 0
-    
+fun ShipmentItemRow(shipment: com.example.delivery.models.ShipmentSearchDetail) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
+            .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+        shape = RoundedCornerShape(6.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // En-tête
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.weight(1f)
             ) {
+                // Numéro d'expédition en gras
                 Text(
-                    text = "Résumé du jour",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = shipment.shipmentNo ?: "N/A",
+                    style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
-                Icon(
-                    Icons.Default.Summarize,
-                    contentDescription = "Résumé",
-                    tint = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Statistiques
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                SummaryItem(
-                    label = "Tournées",
-                    value = totalTours.toString(),
-                    icon = Icons.Default.Route,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-                SummaryItem(
-                    label = "Expéditions",
-                    value = totalExpeditions.toString(),
-                    icon = Icons.Default.LocalShipping,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                SummaryItem(
-                    label = "Villes",
-                    value = totalTours.toString(),
-                    icon = Icons.Default.LocationCity,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SummaryItem(
-    label: String,
-    value: String,
-    icon: ImageVector,
-    color: Color
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(8.dp)
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = color,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-        )
-    }
-}
-
-// Composant pour afficher les informations Trip
-@Composable
-fun TripInfoBox(
-    trips: List<Trip>,
-    isLoading: Boolean,
-    error: String?,
-    onRefresh: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(6.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            // En-tête avec titre et bouton refresh
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                Spacer(modifier = Modifier.height(2.dp))
+                
+                // Ville de livraison avec icône
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.DirectionsCar,
-                        contentDescription = "Trip",
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Ville",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(12.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Informations Trip",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
+                        text = shipment.deliveryCity ?: "Ville inconnue",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                
-                IconButton(
-                    onClick = onRefresh,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Actualiser",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            // Statut de l'expédition
+            val statusColor = when (shipment.status) {
+                "DELIVERED" -> MaterialTheme.colorScheme.tertiary
+                "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
+                "PENDING" -> MaterialTheme.colorScheme.secondary
+                else -> MaterialTheme.colorScheme.outline
+            }
             
-            when {
-                isLoading -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Chargement des trajets...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                
-                error != null -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Error,
-                                contentDescription = "Erreur",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Erreur de chargement",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-                
-                trips.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DirectionsCar,
-                                contentDescription = "Aucun trip",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Aucun trajet trouvé",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
-                
-                else -> {
-                    // Statistiques des trips
-                    val readyTrips = trips.count { it.status == "READY" }
-                    val completedTrips = trips.count { it.status == "COMPLETED" }
-                    val totalTrips = trips.size
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        TripStatItem(
-                            label = "Total",
-                            value = totalTrips.toString(),
-                            icon = Icons.Default.Route,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        TripStatItem(
-                            label = "Prêts",
-                            value = readyTrips.toString(),
-                            icon = Icons.Default.PlayArrow,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        TripStatItem(
-                            label = "Terminés",
-                            value = completedTrips.toString(),
-                            icon = Icons.Default.CheckCircle,
-                            color = MaterialTheme.colorScheme.tertiary
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Liste des 3 premiers trips
-                    Text(
-                        text = "Derniers trajets:",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    trips.take(3).forEach { trip ->
-                        TripItemRow(trip = trip)
-                        if (trip != trips.take(3).last()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                thickness = 1.dp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-                    }
-                }
+            Surface(
+                modifier = Modifier.clip(RoundedCornerShape(4.dp)),
+                color = statusColor.copy(alpha = 0.1f)
+            ) {
+                Text(
+                    text = shipment.status,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = statusColor,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
             }
         }
     }
 }
-
-@Composable
-fun TripStatItem(
-    label: String,
-    value: String,
-    icon: ImageVector,
-    color: Color
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(8.dp)
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = color,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-        )
-    }
-}
-
-@Composable
-fun TripItemRow(trip: Trip) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // ID et Date
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = "Trip #${trip.id}",
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = trip.tripDate.substring(0, 10) + "...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-        }
-        
-        // Statut
-        val status = trip.status
-        val statusColor = when (status) {
-            "READY" -> MaterialTheme.colorScheme.secondary
-            "COMPLETED" -> MaterialTheme.colorScheme.tertiary
-            "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
-            else -> MaterialTheme.colorScheme.outline
-        }
-        
-        Surface(
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)),
-            color = statusColor.copy(alpha = 0.1f)
-        ) {
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                color = statusColor,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-    }
-}
-
-// Composant pour afficher les détails d'un trip avec noms réels et cache
 @Composable
 fun TripDetailCard(
     trip: Trip,
@@ -1114,7 +738,11 @@ fun TripDetailCard(
     driverCache: Map<String, Driver>,
     onVehicleLoaded: (String, Vehicle) -> Unit,
     onDriverLoaded: (String, Driver) -> Unit,
-    onTripClick: (String) -> Unit
+    onTripClick: (String) -> Unit,
+    shipmentApiService: ShipmentApiService? = null,
+    tripShipments: Map<Int, List<com.example.delivery.models.ShipmentSearchDetail>>? = null,
+    onLoadShipments: ((Int) -> Unit)? = null,
+    navController: NavController
 ) {
     val tripId = trip.id
     val tripDate = trip.tripDate
@@ -1130,7 +758,40 @@ fun TripDetailCard(
     val initialDriver = driverCache[driverId]
     var isLoadingDetails by remember { mutableStateOf(initialVehicle == null && vehicleId != "N/A" || initialDriver == null && driverId != "N/A") }
     
+    // États pour les expéditions
+    var shipments by remember { mutableStateOf<List<com.example.delivery.models.ShipmentSearchDetail>>(emptyList()) }
+    var isLoadingShipments by remember { mutableStateOf(false) }
+    
     val coroutineScope = rememberCoroutineScope()
+    
+    // Charger les expéditions depuis le cache ou l'API
+    LaunchedEffect(tripId) {
+        // D'abord vérifier si les expéditions sont déjà dans le cache
+        val cachedShipments = tripShipments?.get(tripId.toInt())
+        if (cachedShipments != null) {
+            shipments = cachedShipments
+        } else if (onLoadShipments != null) {
+            // Sinon les charger via l'API
+            isLoadingShipments = true
+            onLoadShipments(tripId.toInt())
+            // Attendre un peu que les données se chargent dans le cache
+            kotlinx.coroutines.delay(500)
+            // Vérifier à nouveau si les données sont maintenant dans le cache
+            val updatedShipments = tripShipments?.get(tripId.toInt())
+            if (updatedShipments != null) {
+                shipments = updatedShipments
+            }
+            isLoadingShipments = false
+        }
+    }
+    
+    // Mettre à jour les expéditions si le cache est mis à jour
+    LaunchedEffect(tripShipments) {
+        val cachedShipments = tripShipments?.get(tripId.toInt())
+        if (cachedShipments != null) {
+            shipments = cachedShipments
+        }
+    }
     
     // Charger les détails uniquement si pas dans le cache
     LaunchedEffect(vehicleId, driverId) {
@@ -1194,7 +855,7 @@ fun TripDetailCard(
         "READY" -> Icons.Default.PlayArrow
         "COMPLETED" -> Icons.Default.CheckCircle
         "IN_PROGRESS" -> Icons.Default.DirectionsCar
-        else -> Icons.Default.Help
+        else -> Icons.AutoMirrored.Filled.Help
     }
     
     Card(
@@ -1382,6 +1043,186 @@ fun TripDetailCard(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Section Expéditions
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocalShipping,
+                                contentDescription = "Expéditions",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Expéditions",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        
+                        if (isLoadingShipments) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Text(
+                                text = "${shipments.size}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    
+                    if (shipments.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Afficher les 2 premières expéditions avec shipmentNo et deliveryCity
+                        shipments.take(2).forEach { shipment ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = shipment.shipmentNo ?: "N/A",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = "Ville",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text(
+                                            text = shipment.deliveryCity ?: "Ville inconnue",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                
+                                // Statut de l'expédition
+                                val statusColor = when (shipment.status) {
+                                    "DELIVERED" -> MaterialTheme.colorScheme.tertiary
+                                    "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
+                                    "PENDING" -> MaterialTheme.colorScheme.secondary
+                                    else -> MaterialTheme.colorScheme.outline
+                                }
+                                
+                                Surface(
+                                    modifier = Modifier.clip(RoundedCornerShape(4.dp)),
+                                    color = statusColor.copy(alpha = 0.1f)
+                                ) {
+                                    Text(
+                                        text = shipment.status,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = statusColor,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
+                        
+                        if (shipments.size > 2) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "... et ${shipments.size - 2} autre(s)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.align(Alignment.End)
+                            )
+                        }
+                    } else if (!isLoadingShipments) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Aucune expédition",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Boutons d'action
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { 
+                                // Naviguer vers le suivi des tournées avec la date spécifique de la tournée
+                                val tripDateFormatted = tripDate.substring(0, 10) // Extraire YYYY-MM-DD
+                                navController.navigate("delivery?date=$tripDateFormatted")
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Validé",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Validé")
+                        }
+                        
+                        OutlinedButton(
+                            onClick = { 
+                                // Naviguer vers les détails du trajet
+                                navController.navigate("${Screen.TripDetail.route}/${tripId}")
+                            },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Détail",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Détail")
                         }
                     }
                 }

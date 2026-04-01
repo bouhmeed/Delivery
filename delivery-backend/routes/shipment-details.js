@@ -93,6 +93,58 @@ router.get('/:shipmentId/details', async (req, res) => {
             console.log('⚠️ No customerId in shipment');
         }
         
+        // Récupérer les informations des localités (origine et destination)
+        let origin = null;
+        let destination = null;
+        
+        // Récupérer la localité d'origine
+        if (shipment.originId) {
+            const originQuery = `
+                SELECT 
+                    id,
+                    name,
+                    address,
+                    city,
+                    "postalCode"
+                FROM "Location"
+                WHERE id = $1
+            `;
+            
+            try {
+                const originResult = await pool.query(originQuery, [shipment.originId]);
+                if (originResult.rows.length > 0) {
+                    origin = originResult.rows[0];
+                    console.log(`✅ Origin location found: ${origin.name}`);
+                }
+            } catch (originError) {
+                console.log('⚠️ Could not fetch origin location:', originError.message);
+            }
+        }
+        
+        // Récupérer la localité de destination
+        if (shipment.destinationId) {
+            const destinationQuery = `
+                SELECT 
+                    id,
+                    name,
+                    address,
+                    city,
+                    "postalCode"
+                FROM "Location"
+                WHERE id = $1
+            `;
+            
+            try {
+                const destinationResult = await pool.query(destinationQuery, [shipment.destinationId]);
+                if (destinationResult.rows.length > 0) {
+                    destination = destinationResult.rows[0];
+                    console.log(`✅ Destination location found: ${destination.name}`);
+                }
+            } catch (destinationError) {
+                console.log('⚠️ Could not fetch destination location:', destinationError.message);
+            }
+        }
+        
         // Construire la réponse avec les données de base
         const response = {
             success: true,
@@ -133,8 +185,8 @@ router.get('/:shipmentId/details', async (req, res) => {
                     
                     // Informations optionnelles
                     customer: customer,
-                    origin: null,
-                    destination: null,
+                    origin: origin,
+                    destination: destination,
                     driver: null,
                     vehicle: null,
                     trip: null,
