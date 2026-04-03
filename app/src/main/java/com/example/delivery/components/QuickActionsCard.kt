@@ -42,7 +42,7 @@ fun QuickActionsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Vérification d'Assignation de Produit",
+                    text = "Rechercher une Expédition",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1976D2),

@@ -53,15 +53,19 @@ fun DeliveryItemCard(
     val scope = rememberCoroutineScope()
     var isPressed by remember { mutableStateOf(false) }
     
-    // États pour la liste déroulante de statuts
+    // États pour la liste déroulante de statuts - TripShipmentLink.status values only
     var expandedStatus by remember { mutableStateOf(false) }
-    val statusOptions = listOf("À planifier", "Assigné", "En cours", "Terminé")
+    // Status options: TripShipmentLink.status values (ASSIGNED, NON_DEMARRE, EN_COURS, LIVRE, TERMINE)
+    // UI shows French labels but sends DB values directly
+    val statusOptions = listOf("ASSIGNED", "NON_DEMARRE", "EN_COURS", "LIVRE", "TERMINE")
     var selectedStatus by remember { mutableStateOf(
-        when {
-            delivery.podDone -> "Terminé"
-            delivery.status == "EN_COURS" -> "En cours"
-            delivery.status == "ASSIGNED" -> "Assigné"
-            else -> "À planifier"
+        when (delivery.status) {
+            "TERMINE" -> "TERMINE"
+            "LIVRE" -> "LIVRE"
+            "EN_COURS" -> "EN_COURS"
+            "NON_DEMARRE" -> "NON_DEMARRE"
+            "ASSIGNED" -> "ASSIGNED"
+            else -> "ASSIGNED" // Default to ASSIGNED for any unknown status
         }
     ) }
     
@@ -85,47 +89,6 @@ fun DeliveryItemCard(
     
     // Fond de carte toujours blanc
     val cardBackgroundColor = DesignSystem.Colors.SURFACE_WHITE
-    
-    // Fonction pour ouvrir TomTom Maps avec l'adresse
-    fun openTomTomMaps(address: String, city: String, zipCode: String) {
-        println("🗺️ Itinéraire cliqué pour: $address, $city $zipCode")
-        
-        try {
-            // Utiliser l'API TomTom pour la navigation
-            val fullAddress = "$address, $city $zipCode"
-            println("🌐 URL TomTom: $fullAddress")
-            
-            // Essayer d'abord avec l'application TomTom
-            val tomtomUri = "tomtomgo://navigate?to=$fullAddress"
-            val tomtomIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(tomtomUri))
-            
-            if (tomtomIntent.resolveActivity(context.packageManager) != null) {
-                println("✅ TomTom Go trouvé, lancement de la navigation")
-                ContextCompat.startActivity(context, tomtomIntent, null)
-            } else {
-                println("⚠️ TomTom Go non trouvé, essai avec TomTom web")
-                
-                // Fallback 1: TomTom Web
-                val webUri = "https://www.tomtom.com/livetraffic/?apikey=YOUR_API_KEY&center=$fullAddress"
-                val webIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(webUri))
-                
-                if (webIntent.resolveActivity(context.packageManager) != null) {
-                    println("✅ Navigateur web trouvé pour TomTom")
-                    ContextCompat.startActivity(context, webIntent, null)
-                } else {
-                    println("❌ Aucune application trouvée")
-                    // Fallback 2: Copier l'adresse dans le presse-papiers
-                    val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    val clip = android.content.ClipData.newPlainText("Address", fullAddress)
-                    clipboardManager.setPrimaryClip(clip)
-                    println("📋 Adresse copiée: $fullAddress")
-                }
-            }
-        } catch (e: Exception) {
-            println("❌ Erreur: ${e.message}")
-            e.printStackTrace()
-        }
-    }
     
     Card(
         modifier = modifier
@@ -219,20 +182,24 @@ fun DeliveryItemCard(
                                         RoundedCornerShape(4.dp)
                                     )
                             )
+                            // Status display with French translation from TripShipmentLink.status
                             Text(
-                                text = when {
-                                    delivery.podDone -> "Terminé"
-                                    delivery.status == "EN_COURS" -> "En cours"
-                                    else -> "À faire"
+                                text = when (delivery.status) {
+                                    "TERMINE" -> "Terminé"
+                                    "LIVRE" -> "Livrée"
+                                    "EN_COURS" -> "En cours"
+                                    "NON_DEMARRE" -> "Non démarré"
+                                    "ASSIGNED" -> "Assigné"
+                                    else -> delivery.status
                                 },
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = statusColor
                             )
                         }
-                        // Raw DB status
+                        // Raw TripShipmentLink.status (DB value)
                         Text(
-                            text = delivery.status.uppercase(),
+                            text = delivery.status,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = statusColor.copy(alpha = 0.8f)
@@ -411,10 +378,16 @@ fun DeliveryItemCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
-                    value = selectedStatus,
+                    value = when (selectedStatus) {
+                        "NON_DEMARRE" -> "Non démarré"
+                        "EN_COURS" -> "En cours"
+                        "LIVRE" -> "Livrée"
+                        "TERMINE" -> "Terminé"
+                        else -> selectedStatus
+                    },
                     onValueChange = { },
                     readOnly = true,
-                    label = { Text("Statut") },
+                    label = { Text("Statut TripShipmentLink") },
                     trailingIcon = { 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -457,14 +430,22 @@ fun DeliveryItemCard(
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                     }
-                                    Text(status)
+                                    Text(
+                                        when (status) {
+                                            "NON_DEMARRE" -> "Non démarré"
+                                            "EN_COURS" -> "En cours"
+                                            "LIVRE" -> "Livrée"
+                                            "TERMINE" -> "Terminé"
+                                            else -> status
+                                        }
+                                    )
                                 }
                             },
                             onClick = {
                                 if (!isUpdatingStatus && status != selectedStatus) {
                                     // Validation des transitions de statut
                                     val isValidTransition = when {
-                                        selectedStatus == "Terminé" && status != "Terminé" -> false // On ne peut pas revenir de "Terminé"
+                                        selectedStatus == "TERMINE" && status != "TERMINE" -> false // On ne peut pas revenir de "Terminé"
                                         else -> true
                                     }
                                     
@@ -506,15 +487,11 @@ fun DeliveryItemCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(DesignSystem.Sizes.SPACING_SMALL)
                 ) {
-                    // Navigate button - Modern gradient design with enhanced visual effects
+                    // Navigate button - Internal navigation with TomTom SDK
                     Button(
                         onClick = { 
-                            println("🗺️ Bouton Itinéraire cliqué!")
-                            openTomTomMaps(
-                                delivery.fullAddress ?: "Adresse inconnue",
-                                delivery.locationCity ?: "Ville inconnue", 
-                                delivery.locationPostalCode ?: "00000"
-                            )
+                            println("🗺️ Bouton Itinéraire cliqué - Navigation interne!")
+                            onNavigateClick(delivery)
                         },
                         modifier = Modifier
                             .weight(0.9f)
@@ -552,9 +529,9 @@ fun DeliveryItemCard(
                         }
                     }
                     
-                    // Validation button - Primary blue (uniquement si "Terminé" est sélectionné)
+                    // Validation button - Primary blue (uniquement si "LIVRE" ou "TERMINE" est sélectionné)
                     println("🔍 DEBUG: selectedStatus = '$selectedStatus', podDone = ${delivery.podDone}")
-                    if (selectedStatus == "Terminé") {
+                    if (selectedStatus == "LIVRE" || selectedStatus == "TERMINE") {
                         Button(
                             onClick = { 
                                 println("✅ Bouton Validation cliqué!")
@@ -685,7 +662,10 @@ private fun StatusBadge(
             text = when {
                 isCompleted -> "Terminé"
                 status == "EN_COURS" -> "En cours"
-                else -> "À faire"
+                status == "LIVRE" -> "Livrée"
+                status == "NON_DEMARRE" -> "Non démarré"
+                status == "ASSIGNED" -> "Assigné"
+                else -> status
             },
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,

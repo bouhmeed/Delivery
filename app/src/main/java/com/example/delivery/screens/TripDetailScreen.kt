@@ -198,15 +198,7 @@ fun TripDetailContent(
             )
         }
         
-        // Actions rapides
-        item {
-            TripActionsCard(
-                trip = tripDetail.trip,
-                onStartTrip = { viewModel.startTrip(tripDetail.trip.id) },
-                onCompleteTrip = { viewModel.completeTrip(tripDetail.trip.id) }
-            )
-        }
-        
+                
         // Informations chauffeur et véhicule
         item {
             DriverVehicleCard(
@@ -445,90 +437,6 @@ fun TripProgressCard(
     }
 }
 
-@Composable
-fun TripActionsCard(
-    trip: TripDetail,
-    onStartTrip: () -> Unit,
-    onCompleteTrip: () -> Unit
-) {
-    val canStart = trip.status == "READY"
-    val canComplete = trip.status == "IN_PROGRESS"
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(4.dp, RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            if (canStart) {
-                Button(
-                    onClick = onStartTrip,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 8.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Démarrer")
-                }
-            }
-            
-            if (canComplete) {
-                Button(
-                    onClick = onCompleteTrip,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = if (canStart) 8.dp else 0.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiary
-                    )
-                ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Terminer")
-                }
-            }
-            
-            if (!canStart && !canComplete) {
-                // Afficher le statut actuel
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = when (trip.status) {
-                            "PLANNING" -> "En planification"
-                            "COMPLETED" -> "Terminé"
-                            "CANCELLED" -> "Annulé"
-                            else -> trip.status
-                        },
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun DriverVehicleCard(

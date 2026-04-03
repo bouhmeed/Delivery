@@ -407,6 +407,10 @@ fun DeliveryTrackingScreenWithDetails(
     var showShipmentDetails by remember { mutableStateOf(false) }
     var selectedShipmentId by remember { mutableIntStateOf(0) }
     
+    // État pour gérer l'affichage de la carte de navigation
+    var showDriverMap by remember { mutableStateOf(false) }
+    var selectedDeliveryForNavigation by remember { mutableStateOf<DeliveryItem?>(null) }
+    
     // Si une date spécifique est fournie, la définir dans le ViewModel
     LaunchedEffect(selectedDate) {
         selectedDate?.let { dateString ->
@@ -426,11 +430,17 @@ fun DeliveryTrackingScreenWithDetails(
         selectedShipmentId = delivery.shipmentId
     }
     
+    // Fonction pour naviguer vers la carte interne
+    val handleNavigateToMap: (DeliveryItem) -> Unit = { delivery ->
+        selectedDeliveryForNavigation = delivery
+        showDriverMap = true
+    }
+    
     Box {
         DeliveryTrackingScreen(
             driverId = driverId,
             onNavigateToDelivery = handleNavigateToDelivery,
-            onNavigateToMap = onNavigateToMap,
+            onNavigateToMap = handleNavigateToMap,
             onBackPressed = onBackPressed,
             onValidationClick = onValidationClick,
             onCallClick = onCallClick,
@@ -448,8 +458,22 @@ fun DeliveryTrackingScreenWithDetails(
                     selectedShipmentId = 0
                 },
                 onNavigateToMap = { address ->
-                    // TODO: Implémenter la navigation GPS
-                    println("Navigation vers l'adresse: $address")
+                    // Utiliser la navigation interne avec la carte
+                    selectedDeliveryForNavigation?.let { delivery ->
+                        showDriverMap = true
+                    }
+                },
+                navController = navController
+            )
+        }
+        
+        // Afficher l'écran de navigation interne si nécessaire
+        if (showDriverMap && selectedDeliveryForNavigation != null) {
+            DriverMapScreen(
+                delivery = selectedDeliveryForNavigation!!,
+                onBackPressed = {
+                    showDriverMap = false
+                    selectedDeliveryForNavigation = null
                 },
                 navController = navController
             )

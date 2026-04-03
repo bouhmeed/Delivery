@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.delivery"
-        minSdk = 24
+        minSdk = 26  // Updated for TomTom SDK requirement
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -18,6 +18,16 @@ android {
         
         manifestPlaceholders["auth0Domain"] = "almakom.eu.auth0.com"
         manifestPlaceholders["auth0Scheme"] = "delivery"
+        
+        // TomTom API Key - TEMPORARILY DISABLED due to missing Maven credentials
+        // buildConfigField("String", "TOMTOM_API_KEY", "\"c92wOsiK2ds07Gzq9ZJXNRyyWeQhSYse\"")
+        
+        // ABI filters for TomTom SDK - TEMPORARILY DISABLED
+        /*
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+        */
     }
 
     buildTypes {
@@ -35,6 +45,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -88,4 +99,13 @@ dependencies {
 
     // Auth0 SDK
     implementation("com.auth0.android:auth0:2.+")
+    
+    // TomTom Android SDK - TEMPORARILY DISABLED due to missing Maven credentials
+    // Uncomment these lines when TomTom SDK credentials are available
+    /*
+    implementation("com.tomtom.sdk:init:2.1.2")
+    implementation("com.tomtom.sdk:maps:2.1.2")
+    implementation("com.tomtom.sdk:routing:2.1.2")
+    implementation("com.tomtom.sdk:location:2.1.2")
+    */
 }

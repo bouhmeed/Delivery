@@ -130,12 +130,12 @@ fun TourneeScreen(navController: NavController) {
                             )
                         }
                         tripShipments = tripShipments + (tripId to mappedShipments)
-                        Toast.makeText(context, "✅ ${mappedShipments.size} expéditions chargées pour trip $tripId", Toast.LENGTH_SHORT).show()
+                        // Toast.makeText(context, "✅ ${mappedShipments.size} expéditions chargées pour trip $tripId", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "❌ Erreur chargement expéditions trip $tripId: ${response.code()}", Toast.LENGTH_SHORT).show()
+                        // Toast.makeText(context, "❌ Erreur chargement expéditions trip $tripId: ${response.code()}", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(context, "❌ Exception chargement expéditions trip $tripId: ${e.message}", Toast.LENGTH_SHORT).show()
+                    // Toast.makeText(context, "❌ Exception chargement expéditions trip $tripId: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -150,14 +150,14 @@ fun TourneeScreen(navController: NavController) {
                 val response: Response<List<Trip>> = tripApiService.getTripsByDriver(driverId)
                 if (response.isSuccessful) {
                     trips = response.body() ?: emptyList()
-                    Toast.makeText(context, "✅ ${trips.size} trajets chargés pour le driver", Toast.LENGTH_SHORT).show()
+                    // Toast.makeText(context, "✅ ${trips.size} trajets chargés pour le driver", Toast.LENGTH_SHORT).show()
                 } else {
                     tripError = "Erreur ${response.code()}: ${response.message()}"
-                    Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
+                    // Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 tripError = "Exception: ${e.message}"
-                Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
+                // Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
             } finally {
                 isLoadingTrips = false
             }

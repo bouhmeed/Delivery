@@ -39,9 +39,9 @@ fun ShipmentDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1976D2),
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
+                    containerColor = Color.White,
+                    titleContentColor = Color.Black,
+                    navigationIconContentColor = Color.Black
                 )
             )
         }
@@ -57,7 +57,10 @@ fun ShipmentDetailScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                )
             ) {
                 Column(
                     modifier = Modifier
@@ -147,7 +150,10 @@ fun ShipmentDetailScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    )
                 ) {
                     Column(
                         modifier = Modifier
@@ -168,21 +174,36 @@ fun ShipmentDetailScreen(
                             value = client.name
                         )
                         
+                        // Adresse avec fallback: shipment.deliveryAddress -> client.address
+                        val displayAddress = shipment.deliveryAddress 
+                            ?: client.address 
+                            ?: "Adresse non spécifiée"
+                        
                         ShipmentInfoRow(
                             icon = Icons.Default.LocationOn,
                             label = "Adresse",
-                            value = shipment.deliveryAddress ?: "Adresse non spécifiée"
+                            value = displayAddress
                         )
+                        
+                        // Ville avec fallback: shipment.deliveryCity -> client.city
+                        val displayCity = if (!shipment.deliveryCity.isNullOrEmpty()) {
+                            if (!shipment.deliveryZipCode.isNullOrEmpty()) 
+                                "${shipment.deliveryCity} ${shipment.deliveryZipCode}" 
+                            else 
+                                shipment.deliveryCity
+                        } else if (!client.city.isNullOrEmpty()) {
+                            if (!client.postalCode.isNullOrEmpty())
+                                "${client.city} ${client.postalCode}"
+                            else
+                                client.city
+                        } else {
+                            "Ville non spécifiée"
+                        }
                         
                         ShipmentInfoRow(
                             icon = Icons.Default.LocationCity,
                             label = "Ville",
-                            value = if (!shipment.deliveryCity.isNullOrEmpty() && !shipment.deliveryZipCode.isNullOrEmpty()) 
-                                "${shipment.deliveryCity} ${shipment.deliveryZipCode}" 
-                            else if (!shipment.deliveryCity.isNullOrEmpty()) 
-                                shipment.deliveryCity 
-                            else 
-                                "Ville non spécifiée"
+                            value = displayCity
                         )
                         
                         if (client.phone != null) {
@@ -201,7 +222,7 @@ fun ShipmentDetailScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFFFF3CD)
+                        containerColor = Color.White
                     ),
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -251,34 +272,7 @@ fun ShipmentDetailScreen(
                             Text("✅ Marquer comme livré")
                         }
                     }
-                    
-                    OutlinedButton(
-                        onClick = onNavigate,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Map,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("🗺️ Naviguer")
-                    }
                 }
-            }
-            
-            // Bouton retour
-            OutlinedButton(
-                onClick = onNavigateBack,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("❌ Retour")
             }
         }
     }

@@ -12,7 +12,22 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.delivery.navigation.Screen
-import com.example.delivery.screens.*
+import com.example.delivery.screens.LoginScreen
+import com.example.delivery.screens.HomeScreen
+import com.example.delivery.screens.TourneeScreen
+import com.example.delivery.screens.DeliveryTrackingScreenWithDetails
+import com.example.delivery.screens.PODScreen
+import com.example.delivery.screens.ProfileScreen
+import com.example.delivery.screens.HistoryScreen
+import com.example.delivery.screens.SettingsScreen
+import com.example.delivery.screens.ThemeSettingsScreen
+import com.example.delivery.screens.OrderDetailsScreen
+import com.example.delivery.screens.TripTestScreen
+import com.example.delivery.screens.DeliveryTrackingTestScreen
+import com.example.delivery.screens.DateFilterTestScreen
+import com.example.delivery.screens.DeliveryValidationScreen
+import com.example.delivery.screens.TripDetailScreen
+import com.example.delivery.screens.DriverMapScreen
 import com.example.delivery.ui.theme.DeliveryTheme
 
 class MainActivity : ComponentActivity() {
@@ -45,13 +60,16 @@ class MainActivity : ComponentActivity() {
                             DeliveryTrackingScreenWithDetails(
                                 driverId = 5, // Change to 5 for testing, or get from user session
                                 navController = navController,
+                                onBackPressed = {
+                                    navController.popBackStack()
+                                },
                                 onNavigateToDelivery = { delivery ->
                                     // Navigate to delivery details if needed
                                     navController.navigate("order_details/${delivery.shipmentId}")
                                 },
                                 onNavigateToMap = { delivery ->
-                                    // Open maps with delivery address
-                                    // You can implement map navigation here
+                                    // Navigate to internal driver map screen
+                                    navController.navigate(Screen.DriverMap.createRoute(delivery.shipmentId))
                                 },
                                 onValidationClick = { delivery ->
                                     // Navigate to delivery validation screen with shipmentId
@@ -94,9 +112,6 @@ class MainActivity : ComponentActivity() {
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     }
-                                },
-                                onBackPressed = {
-                                    navController.popBackStack()
                                 }
                             )
                         }
@@ -111,8 +126,8 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("order_details/${delivery.shipmentId}")
                                 },
                                 onNavigateToMap = { delivery ->
-                                    // Open maps with delivery address
-                                    // You can implement map navigation here
+                                    // Navigate to internal driver map screen
+                                    navController.navigate(Screen.DriverMap.createRoute(delivery.shipmentId))
                                 },
                                 onValidationClick = { delivery ->
                                     // Navigate to delivery validation screen with shipmentId
@@ -214,6 +229,49 @@ class MainActivity : ComponentActivity() {
                             val tripId = backStackEntry.arguments?.getString("tripId")?.toIntOrNull() ?: 0
                             TripDetailScreen(
                                 tripId = tripId,
+                                navController = navController
+                            )
+                        }
+                        composable(
+                            route = Screen.DriverMap.route,
+                            arguments = listOf(
+                                androidx.navigation.navArgument("shipmentId") {
+                                    type = androidx.navigation.NavType.IntType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val shipmentId = backStackEntry.arguments?.getInt("shipmentId")
+                            // Create a mock delivery item for navigation
+                            // In a real app, you would fetch this from your repository
+                            val mockDelivery = com.example.delivery.models.DeliveryItem(
+                                sequence = 1,
+                                shipmentId = shipmentId ?: 0,
+                                status = "TO_PLAN",
+                                podDone = false,
+                                shipmentNo = "SHIP-$shipmentId",
+                                destinationId = 1,
+                                deliveryAddress = "Adresse de livraison",
+                                deliveryCity = "Paris",
+                                deliveryZipCode = "75000",
+                                deliveryCountry = "France",
+                                clientName = "Client Test",
+                                clientPhone = "+33612345678",
+                                fullAddress = "Adresse de livraison, Paris 75000",
+                                locationCity = "Paris",
+                                locationPostalCode = "75000",
+                                distanceKm = 5.0,
+                                estimatedDuration = 15,
+                                description = "Colis de test",
+                                quantity = 1,
+                                uom = "unité",
+                                latitude = 48.8566, // Default coordinates (Paris)
+                                longitude = 2.3522
+                            )
+                            DriverMapScreen(
+                                delivery = mockDelivery,
+                                onBackPressed = {
+                                    navController.popBackStack()
+                                },
                                 navController = navController
                             )
                         }

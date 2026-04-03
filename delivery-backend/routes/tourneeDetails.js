@@ -129,11 +129,32 @@ router.get('/:id/details', async (req, res) => {
       actualDuration: null // Would need to be calculated from actual start/end times
     };
 
+    // Add origin and destination objects to shipments
+    const shipmentsWithLocations = shipmentsResult.rows.map(shipment => {
+      return {
+        ...shipment,
+        origin: {
+          id: shipment.originId,
+          name: shipment.originName || `Location ${shipment.originId}`,
+          address: shipment.originAddress,
+          city: shipment.originCity,
+          postalCode: null // Could be added if needed
+        },
+        destination: {
+          id: shipment.destinationId,  
+          name: shipment.destinationName || `Location ${shipment.destinationId}`,
+          address: shipment.destinationAddress,
+          city: shipment.destinationCity,
+          postalCode: null // Could be added if needed
+        }
+      };
+    });
+
     const response = {
       success: true,
       data: {
         trip: detailedTrip,
-        shipments: shipmentsResult.rows,
+        shipments: shipmentsWithLocations,
         stops: stopsResult.rows,
         driver: driver,
         vehicle: vehicle,

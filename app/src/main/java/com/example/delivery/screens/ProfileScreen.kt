@@ -170,6 +170,7 @@ fun ProfileScreen(navController: NavController) {
                 item {
                     ProfileHeaderCard(
                         profile = response.profile,
+                        userEmail = userEmail,
                         isEditing = isEditing,
                         onProfileUpdate = { updatedProfile: DriverProfile ->
                             coroutineScope.launch {
@@ -238,82 +239,83 @@ fun ProfileScreen(navController: NavController) {
 @Composable
 fun ProfileHeaderCard(
     profile: DriverProfile,
+    userEmail: String?,
     isEditing: Boolean,
     onProfileUpdate: (DriverProfile) -> Unit
 ) {
     var editableName by remember { mutableStateOf(profile.name) }
     var editablePhone by remember { mutableStateOf(profile.phone ?: "") }
-    var editableEmail by remember { mutableStateOf(profile.email ?: "") }
+    var editableEmail by remember { mutableStateOf(userEmail ?: profile.email ?: "") }
     var editableAddress by remember { mutableStateOf(profile.address ?: "") }
     
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(16.dp)
+                elevation = 4.dp,
+                shape = RoundedCornerShape(20.dp)
             ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-        )
+        shape = RoundedCornerShape(20.dp)
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Profile Header with gradient background
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.primaryContainer
-                            )
-                        )
-                    )
-                    .padding(16.dp)
+            // Profile Header - Horizontal Layout
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                // Avatar with border
+                Box(
+                    modifier = Modifier
+                        .size(70.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            RoundedCornerShape(35.dp)
+                        )
+                        .border(
+                            width = 3.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(35.dp)
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Profile Picture
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onPrimary,
-                                RoundedCornerShape(40.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Profile",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = "Profile",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(35.dp)
+                    )
+                }
+                
+                // Name and Status
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = editableName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     
-                    // Name and Status
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    // Status Chip
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (profile.status == "ACTIF") 
+                            Color(0xFF4CAF50).copy(alpha = 0.15f)
+                        else 
+                            MaterialTheme.colorScheme.errorContainer
                     ) {
-                        Text(
-                            text = editableName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        
                         Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -322,7 +324,7 @@ fun ProfileHeaderCard(
                                     .size(8.dp)
                                     .background(
                                         if (profile.status == "ACTIF") 
-                                            MaterialTheme.colorScheme.tertiary 
+                                            Color(0xFF4CAF50)
                                         else 
                                             MaterialTheme.colorScheme.error,
                                         RoundedCornerShape(4.dp)
@@ -330,12 +332,77 @@ fun ProfileHeaderCard(
                             )
                             Text(
                                 text = profile.status,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f)
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (profile.status == "ACTIF") 
+                                    Color(0xFF2E7D32)
+                                else 
+                                    MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                     }
                 }
+            }
+            
+            // Divider
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            )
+            
+            // Compact Info Grid
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Phone
+                CompactInfoItem(
+                    icon = Icons.Default.Phone,
+                    label = "Téléphone",
+                    value = profile.phone ?: "Non spécifié",
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                // Email
+                CompactInfoItem(
+                    icon = Icons.Default.Email,
+                    label = "Email",
+                    value = userEmail ?: profile.email ?: "Non spécifié",
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+            
+            // Address
+            CompactInfoItem(
+                icon = Icons.Default.LocationOn,
+                label = "Adresse",
+                value = profile.address ?: "Non spécifié",
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            
+            // Professional Info Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CompactInfoItem(
+                    icon = Icons.Default.Badge,
+                    label = "Permis",
+                    value = profile.licenseNumber ?: "Non spécifié",
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                CompactInfoItem(
+                    icon = Icons.Default.WorkspacePremium,
+                    label = "Contrat",
+                    value = profile.employmentType,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.secondary
+                )
             }
             
             // Editable Fields with better design
@@ -403,33 +470,65 @@ fun ProfileHeaderCard(
                         }
                     }
                 }
-            } else {
-                // Display Fields with better layout
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Contact Info Card
-                    InfoCard(
-                        title = "Contact",
-                        icon = Icons.Default.ContactPhone,
-                        items = listOf(
-                            ProfileInfoItem(Icons.Default.Phone, "Téléphone", profile.phone ?: "Non spécifié"),
-                            ProfileInfoItem(Icons.Default.Email, "Email", profile.email ?: "Non spécifié"),
-                            ProfileInfoItem(Icons.Default.LocationOn, "Adresse", profile.address ?: "Non spécifié")
-                        )
-                    )
-                    
-                    // Professional Info Card
-                    InfoCard(
-                        title = "Professionnel",
-                        icon = Icons.Default.Work,
-                        items = listOf(
-                            ProfileInfoItem(Icons.Default.Business, "Dépôt", "ID: ${profile.homeDepotId}"),
-                            ProfileInfoItem(Icons.Default.Badge, "Permis", profile.licenseNumber ?: "Non spécifié"),
-                            ProfileInfoItem(Icons.Default.WorkspacePremium, "Contrat", profile.employmentType)
-                        )
-                    )
-                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CompactInfoItem(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    color: Color
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = color.copy(alpha = 0.08f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(
+                        color.copy(alpha = 0.15f),
+                        RoundedCornerShape(8.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
             }
         }
     }

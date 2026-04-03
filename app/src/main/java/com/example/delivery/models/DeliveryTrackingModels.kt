@@ -86,7 +86,9 @@ data class DeliveryItem(
     val quantity: Int,
     val uom: String,
     val tripIdentifier: String? = null, // Added for display purposes
-    val tripShipmentLinkId: Int? = null // ID du TripShipmentLink pour les mises à jour de statut
+    val tripShipmentLinkId: Int? = null, // ID du TripShipmentLink pour les mises à jour de statut
+    val latitude: Double? = null, // Latitude for navigation
+    val longitude: Double? = null // Longitude for navigation
 )
 
 // Trip with Deliveries Response

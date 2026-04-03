@@ -46,8 +46,8 @@ router.get('/driver/:driverId', async (req, res) => {
       LEFT JOIN "Location" dest_loc ON s."destinationId" = dest_loc.id
       LEFT JOIN "Vehicle" v ON t."vehicleId" = v.id
       LEFT JOIN "Driver" d ON t."driverId" = d.id
-      WHERE t."driverId" = $1 
-        AND (t.status = 'COMPLETED' OR t."tripDate" < CURRENT_DATE)
+      WHERE t."driverId" = $1
+        AND t."tripDate" <= CURRENT_DATE
       ORDER BY t."tripDate" DESC, tsl.sequence ASC
       LIMIT $2 OFFSET $3
     `;
@@ -58,8 +58,8 @@ router.get('/driver/:driverId', async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) as total
       FROM "Trip" t
-      WHERE t."driverId" = $1 
-        AND (t.status = 'COMPLETED' OR t."tripDate" < CURRENT_DATE)
+      WHERE t."driverId" = $1
+        AND t."tripDate" <= CURRENT_DATE
     `;
     const countResult = await pool.query(countQuery, [driverId]);
 

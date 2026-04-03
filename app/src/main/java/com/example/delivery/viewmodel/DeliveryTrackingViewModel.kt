@@ -163,31 +163,42 @@ class DeliveryTrackingViewModel : ViewModel() {
     }
     
     /**
-     * Update delivery status in TripShipmentLink
+     * Update delivery status in TripShipmentLink and corresponding Shipment
+     * Also triggers Trip auto-completion check if status is TERMINE
+     * Uses v2 API endpoint for atomic dual update
      */
     fun updateTripShipmentStatus(tripShipmentLinkId: Int, newStatus: String, driverId: Int? = null) {
         viewModelScope.launch {
             _operationState.value = OperationState.Loading
             
             try {
-                println("🔄 ViewModel: Mise à jour statut livraison $tripShipmentLinkId -> $newStatus")
+                println("🔄 ViewModel: Mise à jour statut v2 livraison TSL=$tripShipmentLinkId -> $newStatus")
                 
-                // Convert French status to TripShipmentLink database status
-                val dbStatus = when (newStatus) {
-                    "À planifier" -> "NON_DEMARRE"
-                    "Assigné" -> "ASSIGNED"
-                    "En cours" -> "EN_COURS"
-                    "Terminé" -> "TERMINE"
-                    else -> newStatus
+                // Validate status is allowed for TripShipmentLink
+                val allowedTslStatuses = listOf("ASSIGNED", "NON_DEMARRE", "EN_COURS", "LIVRE", "TERMINE")
+                if (newStatus !in allowedTslStatuses) {
+                    println("❌ ViewModel: Statut TSL invalide: $newStatus")
+                    _operationState.value = OperationState.Error("Statut invalide: $newStatus")
+                    return@launch
                 }
                 
-                val result = shipmentRepository.updateTripShipmentStatus(tripShipmentLinkId, dbStatus)
+                // Use v2 repository method - backend handles dual update (TSL + Shipment) and auto-complete
+                val result = shipmentRepository.updateTripShipmentStatusV2(tripShipmentLinkId, newStatus, driverId)
                 
                 when {
                     result.isSuccess -> {
-                        val responseBody = result.getOrNull()
-                        println("✅ ViewModel: Statut mis à jour avec succès")
-                        _operationState.value = OperationState.Success("Statut mis à jour avec succès")
+                        val response = result.getOrNull()
+                        val tripAutoCompleted = response?.data?.tripAutoCompleted ?: false
+                        
+                        println("✅ ViewModel: Statut mis à jour avec succès (tripAutoCompleted=$tripAutoCompleted)")
+                        
+                        val successMessage = if (tripAutoCompleted) {
+                            "Statut mis à jour - Trip auto-complété"
+                        } else {
+                            "Statut mis à jour avec succès"
+                        }
+                        
+                        _operationState.value = OperationState.Success(successMessage)
                         
                         // Refresh data for current driver if driverId is provided
                         driverId?.let { refresh(it) }
@@ -242,13 +253,16 @@ class DeliveryTrackingViewModel : ViewModel() {
     }
     
     /**
-     * Get delivery statistics from current deliveries
+     * Get delivery statistics from current deliveries - based on TripShipmentLink.status
      */
     private fun getDeliveryStats(deliveries: List<DeliveryItem>): DeliveryStats {
         val total = deliveries.size
-        val completed = deliveries.count { it.podDone }
-        val inProgress = deliveries.count { !it.podDone && it.status == "EN_COURS" }
-        val notStarted = deliveries.count { !it.podDone && (it.status == "NON_DEMARRE" || it.status == "ASSIGNED") }
+        // Completed = TERMINE (fully completed delivery)
+        val completed = deliveries.count { it.status == "TERMINE" }
+        // In progress = EN_COURS or LIVRE (delivered but not fully completed)
+        val inProgress = deliveries.count { it.status == "EN_COURS" || it.status == "LIVRE" }
+        // Not started = NON_DEMARRE or ASSIGNED
+        val notStarted = deliveries.count { it.status == "NON_DEMARRE" || it.status == "ASSIGNED" }
         
         return DeliveryStats(
             total = total,

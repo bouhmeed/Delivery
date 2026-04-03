@@ -182,28 +182,6 @@ fun ShipmentDetailCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            
-            // Bouton d'action
-            if (shipment.status.uppercase() != "DELIVERED") {
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onDeliver,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Marquer comme livrée")
-                }
-            }
         }
     }
 }

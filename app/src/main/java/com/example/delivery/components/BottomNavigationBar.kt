@@ -24,6 +24,14 @@ fun BottomNavigationBar(navController: NavController) {
         val currentRoute = navBackStackEntry.value?.destination?.route
 
         items.forEach { screen ->
+            // Vérifier si la route actuelle correspond à l'écran
+            val isSelected = when (screen.route) {
+                "delivery" -> currentRoute?.startsWith("delivery") == true
+                "order_details" -> currentRoute?.startsWith("order_details") == true
+                "deliveryValidation" -> currentRoute?.startsWith("deliveryValidation") == true
+                else -> currentRoute == screen.route
+            }
+
             NavigationBarItem(
                 icon = { 
                     Icon(
@@ -50,7 +58,7 @@ fun BottomNavigationBar(navController: NavController) {
                         }
                     )
                 },
-                selected = currentRoute == screen.route,
+                selected = isSelected,
                 onClick = {
                     navController.navigate(screen.route) {
                         popUpTo(navController.graph.startDestinationId)

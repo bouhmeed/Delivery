@@ -303,6 +303,11 @@ router.get('/:tripId/deliveries', async (req, res) => {
 });
 
 /**
+ * Valid status values for TripShipmentLink
+ */
+const VALID_TSL_STATUSES = ['ASSIGNED', 'NON_DEMARRE', 'EN_COURS', 'LIVRE', 'TERMINE'];
+
+/**
  * PUT /api/shipments/:shipmentId/status
  * Mettre à jour le statut d'une livraison
  */
@@ -314,6 +319,14 @@ router.put('/shipments/:shipmentId/status', async (req, res) => {
         return res.status(400).json({ 
             success: false, 
             message: 'status est requis' 
+        });
+    }
+    
+    // Validate status value
+    if (!VALID_TSL_STATUSES.includes(status)) {
+        return res.status(400).json({
+            success: false,
+            message: `Statut invalide. Valeurs autorisées: ${VALID_TSL_STATUSES.join(', ')}`
         });
     }
     
@@ -358,11 +371,11 @@ router.put('/shipments/:shipmentId/complete', async (req, res) => {
     
     try {
         const query = `
-            UPDATE TripShipmentLink 
-            SET status = 'COMPLETED', 
-                podDone = true, 
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE shipmentId = $1
+            UPDATE "TripShipmentLink" 
+            SET status = 'TERMINE', 
+                "podDone" = true, 
+                "updatedAt" = CURRENT_TIMESTAMP
+            WHERE "shipmentId" = $1
         `;
         
         const result = await pool.query(query, [shipmentId]);

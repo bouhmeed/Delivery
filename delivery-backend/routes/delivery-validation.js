@@ -7,6 +7,16 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
+/**
+ * Valid status values for TripShipmentLink
+ */
+const VALID_TSL_STATUSES = ['ASSIGNED', 'NON_DEMARRE', 'EN_COURS', 'LIVRE', 'TERMINE'];
+
+/**
+ * Valid status values for Shipment
+ */
+const VALID_SHIPMENT_STATUSES = ['TO_PLAN', 'EXPEDITION', 'DELIVERED'];
+
 // POST /api/delivery-validation/proof - Save delivery proof with signature
 router.post('/proof', async (req, res) => {
     const client = await pool.connect();
