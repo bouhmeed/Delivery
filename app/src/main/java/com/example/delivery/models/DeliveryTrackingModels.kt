@@ -82,7 +82,6 @@ data class DeliveryItem(
     val locationPostalCode: String?,
     val distanceKm: Double?,
     val estimatedDuration: Int?,
-    val description: String,
     val quantity: Int,
     val uom: String,
     val tripIdentifier: String? = null, // Added for display purposes

@@ -28,6 +28,7 @@ import com.example.delivery.screens.DateFilterTestScreen
 import com.example.delivery.screens.DeliveryValidationScreen
 import com.example.delivery.screens.TripDetailScreen
 import com.example.delivery.screens.DriverMapScreen
+import com.example.delivery.screens.ReturnsScreen
 import com.example.delivery.ui.theme.DeliveryTheme
 
 class MainActivity : ComponentActivity() {
@@ -225,6 +226,20 @@ class MainActivity : ComponentActivity() {
                                 shipmentId = shipmentId
                             )
                         }
+                        composable(
+                            route = "returns/{shipmentId}",
+                            arguments = listOf(
+                                androidx.navigation.navArgument("shipmentId") {
+                                    type = androidx.navigation.NavType.IntType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val shipmentId = backStackEntry.arguments?.getInt("shipmentId")
+                            ReturnsScreen(
+                                navController = navController,
+                                shipmentId = shipmentId ?: 0
+                            )
+                        }
                         composable("${Screen.TripDetail.route}/{tripId}") { backStackEntry ->
                             val tripId = backStackEntry.arguments?.getString("tripId")?.toIntOrNull() ?: 0
                             TripDetailScreen(
@@ -261,7 +276,6 @@ class MainActivity : ComponentActivity() {
                                 locationPostalCode = "75000",
                                 distanceKm = 5.0,
                                 estimatedDuration = 15,
-                                description = "Colis de test",
                                 quantity = 1,
                                 uom = "unité",
                                 latitude = 48.8566, // Default coordinates (Paris)

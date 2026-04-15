@@ -63,13 +63,21 @@ interface ShipmentApiService {
         @Path("tripShipmentLinkId") tripShipmentLinkId: Int,
         @Body request: StatusUpdateRequestV2
     ): Response<StatusUpdateResponseV2>
+    
+    /**
+     * Obtenir les dates des expéditions pour un chauffeur (pour le calendrier)
+     */
+    @GET("api/shipment/dates/{driverId}")
+    suspend fun getShipmentDates(
+        @Path("driverId") driverId: Int
+    ): Response<ShipmentDatesResponse>
 }
 
 /**
  * Request body pour la mise à jour de statut v2
  */
 data class StatusUpdateRequestV2(
-    val status: String, // "ASSIGNED" | "NON_DEMARRE" | "EN_COURS" | "LIVRE" | "TERMINE"
+    val status: String, // "TO_PLAN" | "EXPEDITION" | "DELIVERED"
     val updateShipment: Boolean = true,
     val driverId: Int? = null
 )
@@ -118,4 +126,13 @@ data class TripShipmentLinkUpdate(
     val status: String,
     val podDone: Boolean,
     val updatedAt: String
+)
+
+/**
+ * Response pour les dates des expéditions
+ */
+data class ShipmentDatesResponse(
+    val success: Boolean,
+    val data: List<String>, // Liste de dates au format "yyyy-MM-dd"
+    val message: String? = null
 )

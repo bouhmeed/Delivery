@@ -146,8 +146,8 @@ object DesignSystem {
         fun getStatusColor(isCompleted: Boolean, status: String? = null): Color {
             return when {
                 isCompleted -> Colors.STATUS_COMPLETED
-                status == "EN_COURS" -> Colors.STATUS_IN_PROGRESS
-                status == "NON_DEMARRE" -> Colors.STATUS_PENDING
+                status == "EXPEDITION" -> Colors.STATUS_IN_PROGRESS
+                status == "TO_PLAN" -> Colors.STATUS_PENDING
                 else -> Colors.STATUS_PENDING
             }
         }

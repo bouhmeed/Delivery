@@ -3,33 +3,34 @@ const router = express.Router();
 const pool = require('../config/database');
 
 /**
- * Valid status values for TripShipmentLink
- */
-const VALID_TSL_STATUSES = ['ASSIGNED', 'NON_DEMARRE', 'EN_COURS', 'LIVRE', 'TERMINE'];
-
-/**
  * Valid status values for Shipment
  */
 const VALID_SHIPMENT_STATUSES = ['TO_PLAN', 'EXPEDITION', 'DELIVERED'];
 
 /**
- * Map TripShipmentLink status to Shipment status
+ * Valid status values for TripShipmentLink
  */
-function mapTslToShipmentStatus(tslStatus) {
-    switch (tslStatus) {
-        case 'EN_COURS':
-            return 'EXPEDITION';
-        case 'LIVRE':
-        case 'TERMINE':
-            return 'DELIVERED';
+const VALID_TSL_STATUSES = ['ASSIGNED', 'NON_DEMARRE', 'EN_COURS', 'LIVRE', 'TERMINE'];
+
+/**
+ * Map Shipment status to TripShipmentLink status
+ */
+function mapShipmentToTslStatus(shipmentStatus) {
+    switch (shipmentStatus) {
+        case 'TO_PLAN':
+            return 'NON_DEMARRE';
+        case 'EXPEDITION':
+            return 'EN_COURS';
+        case 'DELIVERED':
+            return 'TERMINE';
         default:
-            return null; // No update needed for other statuses
+            return 'ASSIGNED'; // Default fallback
     }
 }
 
 /**
  * PUT /api/delivery-tracking/trip-shipment/:tripShipmentLinkId/status
- * Update TripShipmentLink status and optionally Shipment status
+ * Update Shipment status (from frontend) and TripShipmentLink status (mapped)
  * Also checks and auto-completes trip if all deliveries are TERMINE
  */
 router.put('/trip-shipment/:tripShipmentLinkId/status', async (req, res) => {
@@ -47,17 +48,17 @@ router.put('/trip-shipment/:tripShipmentLinkId/status', async (req, res) => {
             });
         }
         
-        // Validate status value
-        if (!VALID_TSL_STATUSES.includes(status)) {
+        // Validate status value (now accepts Shipment status)
+        if (!VALID_SHIPMENT_STATUSES.includes(status)) {
             return res.status(400).json({
                 success: false,
-                message: `Invalid status. Allowed values: ${VALID_TSL_STATUSES.join(', ')}`
+                message: `Invalid status. Allowed values: ${VALID_SHIPMENT_STATUSES.join(', ')}`
             });
         }
         
         await client.query('BEGIN');
         
-        console.log(`🔄 Backend: Mise à jour statut TripShipmentLink ${tripShipmentLinkId} -> ${status}`);
+        console.log(`🔄 Backend: Mise à jour statut Shipment (via TSL ${tripShipmentLinkId}) -> ${status}`);
         
         // Get current TripShipmentLink info (including tripId and shipmentId)
         const tslQuery = `
@@ -79,6 +80,9 @@ router.put('/trip-shipment/:tripShipmentLinkId/status', async (req, res) => {
         const tripId = tripShipmentLink.tripId;
         const shipmentId = tripShipmentLink.shipmentId;
         
+        // Map Shipment status to TripShipmentLink status
+        const tslStatus = mapShipmentToTslStatus(status);
+        
         // Update TripShipmentLink status
         const updateTslQuery = `
             UPDATE "TripShipmentLink"
@@ -86,34 +90,31 @@ router.put('/trip-shipment/:tripShipmentLinkId/status', async (req, res) => {
             WHERE id = $2
             RETURNING id, status, "podDone", "updatedAt"
         `;
-        const updatedTsl = await client.query(updateTslQuery, [status, tripShipmentLinkId]);
+        const updatedTsl = await client.query(updateTslQuery, [tslStatus, tripShipmentLinkId]);
         
         let updatedShipment = null;
         
-        // Update Shipment status if applicable and requested
+        // Update Shipment status if requested
         if (updateShipment) {
-            const shipmentStatus = mapTslToShipmentStatus(status);
-            if (shipmentStatus && VALID_SHIPMENT_STATUSES.includes(shipmentStatus)) {
-                console.log(`🔄 Backend: Mise à jour statut Shipment ${shipmentId} -> ${shipmentStatus}`);
-                
-                const updateShipmentQuery = `
-                    UPDATE "Shipment"
-                    SET status = $1, "updatedAt" = CURRENT_TIMESTAMP
-                    WHERE id = $2
-                    RETURNING id, status, "updatedAt"
-                `;
-                const shipmentResult = await client.query(updateShipmentQuery, [shipmentStatus, shipmentId]);
-                
-                if (shipmentResult.rows.length > 0) {
-                    updatedShipment = shipmentResult.rows[0];
-                    console.log(`✅ Backend: Shipment ${shipmentId} mis à jour -> ${shipmentStatus}`);
-                }
+            console.log(`🔄 Backend: Mise à jour statut Shipment ${shipmentId} -> ${status}`);
+            
+            const updateShipmentQuery = `
+                UPDATE "Shipment"
+                SET status = $1, "updatedAt" = CURRENT_TIMESTAMP
+                WHERE id = $2
+                RETURNING id, status, "updatedAt"
+            `;
+            const shipmentResult = await client.query(updateShipmentQuery, [status, shipmentId]);
+            
+            if (shipmentResult.rows.length > 0) {
+                updatedShipment = shipmentResult.rows[0];
+                console.log(`✅ Backend: Shipment ${shipmentId} mis à jour -> ${status}`);
             }
         }
         
         // Check for trip auto-completion
         let tripAutoCompleted = false;
-        if (status === 'TERMINE') {
+        if (status === 'DELIVERED') {
             console.log(`🔄 Backend: Vérification auto-complétion trip ${tripId}`);
             
             // Count non-TERMINE deliveries in trip

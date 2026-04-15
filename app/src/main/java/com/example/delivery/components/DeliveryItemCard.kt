@@ -53,19 +53,17 @@ fun DeliveryItemCard(
     val scope = rememberCoroutineScope()
     var isPressed by remember { mutableStateOf(false) }
     
-    // États pour la liste déroulante de statuts - TripShipmentLink.status values only
+    // États pour la liste déroulante de statuts - Shipment.status values
     var expandedStatus by remember { mutableStateOf(false) }
-    // Status options: TripShipmentLink.status values (ASSIGNED, NON_DEMARRE, EN_COURS, LIVRE, TERMINE)
+    // Status options: Shipment.status values (TO_PLAN, EXPEDITION, DELIVERED)
     // UI shows French labels but sends DB values directly
-    val statusOptions = listOf("ASSIGNED", "NON_DEMARRE", "EN_COURS", "LIVRE", "TERMINE")
+    val statusOptions = listOf("TO_PLAN", "EXPEDITION", "DELIVERED")
     var selectedStatus by remember { mutableStateOf(
         when (delivery.status) {
-            "TERMINE" -> "TERMINE"
-            "LIVRE" -> "LIVRE"
-            "EN_COURS" -> "EN_COURS"
-            "NON_DEMARRE" -> "NON_DEMARRE"
-            "ASSIGNED" -> "ASSIGNED"
-            else -> "ASSIGNED" // Default to ASSIGNED for any unknown status
+            "DELIVERED" -> "DELIVERED"
+            "EXPEDITION" -> "EXPEDITION"
+            "TO_PLAN" -> "TO_PLAN"
+            else -> "TO_PLAN" // Default to TO_PLAN for any unknown status
         }
     ) }
     
@@ -182,14 +180,12 @@ fun DeliveryItemCard(
                                         RoundedCornerShape(4.dp)
                                     )
                             )
-                            // Status display with French translation from TripShipmentLink.status
+                            // Status display with French translation from Shipment.status
                             Text(
                                 text = when (delivery.status) {
-                                    "TERMINE" -> "Terminé"
-                                    "LIVRE" -> "Livrée"
-                                    "EN_COURS" -> "En cours"
-                                    "NON_DEMARRE" -> "Non démarré"
-                                    "ASSIGNED" -> "Assigné"
+                                    "DELIVERED" -> "Livrée"
+                                    "EXPEDITION" -> "En expédition"
+                                    "TO_PLAN" -> "À planifier"
                                     else -> delivery.status
                                 },
                                 style = MaterialTheme.typography.labelMedium,
@@ -357,15 +353,6 @@ fun DeliveryItemCard(
                         color = Color(0xFF666666),
                         fontWeight = FontWeight.Medium
                     )
-                    delivery.description?.let { desc ->
-                        Text(
-                            text = desc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF999999),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
             }
             
@@ -379,15 +366,14 @@ fun DeliveryItemCard(
             ) {
                 OutlinedTextField(
                     value = when (selectedStatus) {
-                        "NON_DEMARRE" -> "Non démarré"
-                        "EN_COURS" -> "En cours"
-                        "LIVRE" -> "Livrée"
-                        "TERMINE" -> "Terminé"
+                        "TO_PLAN" -> "À planifier"
+                        "EXPEDITION" -> "En expédition"
+                        "DELIVERED" -> "Livrée"
                         else -> selectedStatus
                     },
                     onValueChange = { },
                     readOnly = true,
-                    label = { Text("Statut TripShipmentLink") },
+                    label = { Text("Statut") },
                     trailingIcon = { 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -432,10 +418,9 @@ fun DeliveryItemCard(
                                     }
                                     Text(
                                         when (status) {
-                                            "NON_DEMARRE" -> "Non démarré"
-                                            "EN_COURS" -> "En cours"
-                                            "LIVRE" -> "Livrée"
-                                            "TERMINE" -> "Terminé"
+                                            "TO_PLAN" -> "À planifier"
+                                            "EXPEDITION" -> "En expédition"
+                                            "DELIVERED" -> "Livrée"
                                             else -> status
                                         }
                                     )
@@ -443,29 +428,19 @@ fun DeliveryItemCard(
                             },
                             onClick = {
                                 if (!isUpdatingStatus && status != selectedStatus) {
-                                    // Validation des transitions de statut
-                                    val isValidTransition = when {
-                                        selectedStatus == "TERMINE" && status != "TERMINE" -> false // On ne peut pas revenir de "Terminé"
-                                        else -> true
-                                    }
+                                    isUpdatingStatus = true
+                                    selectedStatus = status
+                                    expandedStatus = false
                                     
-                                    if (isValidTransition) {
-                                        isUpdatingStatus = true
-                                        selectedStatus = status
-                                        expandedStatus = false
-                                        
-                                        println("🔄 Changement de statut: ${delivery.shipmentNo} -> $status")
-                                        
-                                        // Appeler le callback pour mettre à jour le statut
-                                        onStatusChange(delivery, status)
-                                        
-                                        // Simuler la fin de la mise à jour (sera géré par le ViewModel)
-                                        scope.launch {
-                                            delay(2000) // Timeout de sécurité
-                                            isUpdatingStatus = false
-                                        }
-                                    } else {
-                                        println("⚠️ Transition de statut invalide: $selectedStatus -> $status")
+                                    println("🔄 Changement de statut: ${delivery.shipmentNo} -> $status")
+                                    
+                                    // Appeler le callback pour mettre à jour le statut
+                                    onStatusChange(delivery, status)
+                                    
+                                    // Simuler la fin de la mise à jour (sera géré par le ViewModel)
+                                    scope.launch {
+                                        delay(2000) // Timeout de sécurité
+                                        isUpdatingStatus = false
                                     }
                                 }
                             },
@@ -529,9 +504,9 @@ fun DeliveryItemCard(
                         }
                     }
                     
-                    // Validation button - Primary blue (uniquement si "LIVRE" ou "TERMINE" est sélectionné)
+                    // Validation button - Primary blue (uniquement si "DELIVERED" est sélectionné)
                     println("🔍 DEBUG: selectedStatus = '$selectedStatus', podDone = ${delivery.podDone}")
-                    if (selectedStatus == "LIVRE" || selectedStatus == "TERMINE") {
+                    if (selectedStatus == "DELIVERED") {
                         Button(
                             onClick = { 
                                 println("✅ Bouton Validation cliqué!")
@@ -660,11 +635,9 @@ private fun StatusBadge(
     ) {
         Text(
             text = when {
-                isCompleted -> "Terminé"
-                status == "EN_COURS" -> "En cours"
-                status == "LIVRE" -> "Livrée"
-                status == "NON_DEMARRE" -> "Non démarré"
-                status == "ASSIGNED" -> "Assigné"
+                status == "DELIVERED" -> "Livrée"
+                status == "EXPEDITION" -> "En expédition"
+                status == "TO_PLAN" -> "À planifier"
                 else -> status
             },
             style = MaterialTheme.typography.bodySmall,

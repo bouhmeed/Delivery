@@ -42,6 +42,10 @@ class DeliveryTrackingViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
     
+    // Shipment dates for calendar
+    private val _shipmentDates = MutableStateFlow<List<String>>(emptyList())
+    val shipmentDates: StateFlow<List<String>> = _shipmentDates.asStateFlow()
+    
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     
     /**
@@ -172,12 +176,12 @@ class DeliveryTrackingViewModel : ViewModel() {
             _operationState.value = OperationState.Loading
             
             try {
-                println("🔄 ViewModel: Mise à jour statut v2 livraison TSL=$tripShipmentLinkId -> $newStatus")
+                println("🔄 ViewModel: Mise à jour statut livraison TSL=$tripShipmentLinkId -> $newStatus")
                 
-                // Validate status is allowed for TripShipmentLink
-                val allowedTslStatuses = listOf("ASSIGNED", "NON_DEMARRE", "EN_COURS", "LIVRE", "TERMINE")
-                if (newStatus !in allowedTslStatuses) {
-                    println("❌ ViewModel: Statut TSL invalide: $newStatus")
+                // Validate status is allowed for Shipment
+                val allowedShipmentStatuses = listOf("TO_PLAN", "EXPEDITION", "DELIVERED")
+                if (newStatus !in allowedShipmentStatuses) {
+                    println("❌ ViewModel: Statut Shipment invalide: $newStatus")
                     _operationState.value = OperationState.Error("Statut invalide: $newStatus")
                     return@launch
                 }
@@ -257,12 +261,12 @@ class DeliveryTrackingViewModel : ViewModel() {
      */
     private fun getDeliveryStats(deliveries: List<DeliveryItem>): DeliveryStats {
         val total = deliveries.size
-        // Completed = TERMINE (fully completed delivery)
-        val completed = deliveries.count { it.status == "TERMINE" }
-        // In progress = EN_COURS or LIVRE (delivered but not fully completed)
-        val inProgress = deliveries.count { it.status == "EN_COURS" || it.status == "LIVRE" }
-        // Not started = NON_DEMARRE or ASSIGNED
-        val notStarted = deliveries.count { it.status == "NON_DEMARRE" || it.status == "ASSIGNED" }
+        // Completed = DELIVERED
+        val completed = deliveries.count { it.status == "DELIVERED" }
+        // In progress = EXPEDITION
+        val inProgress = deliveries.count { it.status == "EXPEDITION" }
+        // Not started = TO_PLAN
+        val notStarted = deliveries.count { it.status == "TO_PLAN" }
         
         return DeliveryStats(
             total = total,
@@ -293,6 +297,34 @@ class DeliveryTrackingViewModel : ViewModel() {
      */
     fun isPast(date: LocalDate = _selectedDate.value): Boolean {
         return date.isBefore(LocalDate.now())
+    }
+    
+    /**
+     * Load shipment dates for calendar
+     */
+    fun loadShipmentDates(driverId: Int) {
+        viewModelScope.launch {
+            try {
+                val result = shipmentRepository.getShipmentDates(driverId)
+                when {
+                    result.isSuccess -> {
+                        val response = result.getOrNull()
+                        if (response?.success == true) {
+                            _shipmentDates.value = response.data ?: emptyList()
+                            println("✅ ViewModel: ${_shipmentDates.value.size} dates d'expéditions chargées")
+                        } else {
+                            println("⚠️ ViewModel: Erreur chargement dates - ${response?.message}")
+                        }
+                    }
+                    result.isFailure -> {
+                        val exception = result.exceptionOrNull()
+                        println("❌ ViewModel: Exception chargement dates - ${exception?.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ ViewModel: Exception loadShipmentDates - ${e.message}")
+            }
+        }
     }
 }
 

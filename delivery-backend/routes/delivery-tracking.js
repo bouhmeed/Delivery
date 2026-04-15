@@ -68,7 +68,7 @@ router.get('/date', async (req, res) => {
                 tsl.id as "tripShipmentLinkId",
                 tsl.sequence,
                 tsl."shipmentId",
-                tsl.status,
+                s.status,
                 tsl."podDone",
                 s."shipmentNo",
                 s."destinationId",
@@ -78,7 +78,6 @@ router.get('/date', async (req, res) => {
                 s."deliveryCountry",
                 s."distanceKm",
                 s."estimatedDuration",
-                s.description,
                 s.quantity,
                 s.uom,
                 c.name as "clientName",
@@ -94,7 +93,6 @@ router.get('/date', async (req, res) => {
             ORDER BY tsl.sequence
         `;
         
-        console.log('Deliveries query:', deliveriesQuery);
         console.log('Trip ID:', trip.id);
         
         const deliveriesResult = await pool.query(deliveriesQuery, [trip.id]);
@@ -207,7 +205,7 @@ router.get('/today/with-deliveries', async (req, res) => {
                     tsl.id as tripShipmentLinkId,
                     tsl.sequence,
                     tsl.shipmentId,
-                    tsl.status,
+                    s.status,
                     tsl.podDone,
                     s.shipmentNo,
                     s.destinationId,
@@ -217,7 +215,6 @@ router.get('/today/with-deliveries', async (req, res) => {
                     s.deliveryCountry,
                     s.distanceKm,
                     s.estimatedDuration,
-                    s.description,
                     s.quantity,
                     s.uom,
                     c.name as "clientName",
@@ -264,7 +261,7 @@ router.get('/:tripId/deliveries', async (req, res) => {
                 tsl.id as tripShipmentLinkId,
                 tsl.sequence,
                 tsl.shipmentId,
-                tsl.status,
+                s.status,
                 tsl.podDone,
                 s.shipmentNo,
                 s.destinationId,
@@ -274,7 +271,6 @@ router.get('/:tripId/deliveries', async (req, res) => {
                 s.deliveryCountry,
                 s.distanceKm,
                 s.estimatedDuration,
-                s.description,
                 s.quantity,
                 s.uom,
                 c.name as "clientName",
