@@ -33,6 +33,16 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import android.content.Intent
 import android.net.Uri
+import android.location.Location
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.Priority
 import com.example.delivery.models.DeliveryItem
 import com.example.delivery.ui.DesignSystem
 import kotlinx.coroutines.delay
@@ -690,19 +700,51 @@ private fun formatAddress(address: String?, city: String?, postalCode: String?):
 
 // Web navigation functions
 private fun openTomTomWebNavigation(context: android.content.Context, delivery: DeliveryItem) {
-    val lat = delivery.latitude
-    val lon = delivery.longitude
+    val destLat = delivery.latitude
+    val destLon = delivery.longitude
 
-    if (lat == null || lon == null) {
+    if (destLat == null || destLon == null) {
         println("❌ Coordinates not available for navigation")
         return
     }
 
-    val apiKey = "c92wOsiK2ds07Gzq9ZJXNRyyWeQhSYse"
-    val url = "https://plan.tomtom.com/en/route/plan/?key=$apiKey&to=$lat,$lon"
+    // Get current location
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
-    println("🌐 Opening TomTom web navigation:")
-    println("📍 Destination: $lat, $lon")
+    // Check location permissions
+    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+        ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        println("⚠️ Location permissions not granted, using default location (Paris)")
+        openTomTomNavigationWithLocation(context, 48.8566, 2.3522, destLat, destLon)
+        return
+    }
+
+    // Get last known location
+    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+        if (location != null) {
+            println("📍 Current location: ${location.latitude}, ${location.longitude}")
+            openTomTomNavigationWithLocation(context, location.latitude, location.longitude, destLat, destLon)
+        } else {
+            println("⚠️ Last known location not available, using default location (Paris)")
+            openTomTomNavigationWithLocation(context, 48.8566, 2.3522, destLat, destLon)
+        }
+    }.addOnFailureListener { e ->
+        println("❌ Failed to get location: ${e.message}")
+        println("⚠️ Using default location (Paris)")
+        openTomTomNavigationWithLocation(context, 48.8566, 2.3522, destLat, destLon)
+    }
+}
+
+private fun openTomTomNavigationWithLocation(context: android.content.Context, startLat: Double, startLon: Double, destLat: Double, destLon: Double) {
+    val apiKey = "c92wOsiK2ds07Gzq9ZJXNRyyWeQhSYse"
+
+    // TomTom route URL format with destination in sorted parameter
+    // Format: key, p (position), r (route with sorted waypoints), to (destination)
+    val url = "https://plan.tomtom.com/en/route/plan?key=$apiKey&p=$startLat,$startLon,12z&r=(costModel:FASTEST,routingProvider:GLOBAL,sorted:(h~V${startLat}~J${startLon}~Vaddr~E_Driver,h~V${destLat}~J${destLon}~Vaddr~E_Client),travelMode:CAR,vehicleParameters:(axleWeight:-+,height:-+,length:-+,maxSpeed:-+,vehicleModelId:-+,weight:-+,width:-+))&to=$destLat,$destLon"
+
+    println("🌐 Opening TomTom route planner:")
+    println("📍 From (Driver): $startLat, $startLon")
+    println("📍 To (Client): $destLat, $destLon")
     println("🔗 URL: $url")
 
     try {
@@ -712,14 +754,27 @@ private fun openTomTomWebNavigation(context: android.content.Context, delivery: 
 
         if (activities.isNotEmpty()) {
             context.startActivity(intent)
-            println("✅ TomTom web navigation opened successfully")
+            println("✅ TomTom route planner opened successfully")
         } else {
             println("⚠️ No browser found, trying Google Maps fallback")
-            openGoogleMapsFallback(context, lat, lon)
+            openGoogleMapsFallbackWithRoute(context, startLat, startLon, destLat, destLon)
         }
     } catch (e: Exception) {
-        println("❌ Failed to open TomTom web navigation: ${e.message}")
-        openGoogleMapsFallback(context, lat, lon)
+        println("❌ Failed to open TomTom route planner: ${e.message}")
+        openGoogleMapsFallbackWithRoute(context, startLat, startLon, destLat, destLon)
+    }
+}
+
+private fun openGoogleMapsFallbackWithRoute(context: android.content.Context, startLat: Double, startLon: Double, destLat: Double, destLon: Double) {
+    val url = "https://www.google.com/maps/dir/?api=1&origin=$startLat,$startLon&destination=$destLat,$destLon&travelmode=driving"
+    println("🔄 Opening Google Maps fallback with route: $url")
+
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        context.startActivity(intent)
+        println("✅ Google Maps opened successfully")
+    } catch (e: Exception) {
+        println("❌ Failed to open Google Maps: ${e.message}")
     }
 }
 
