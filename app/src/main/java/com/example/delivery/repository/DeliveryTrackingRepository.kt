@@ -18,13 +18,23 @@ class DeliveryTrackingRepository {
      */
     fun getTripForDate(driverId: Int, date: String): Flow<Result<TripWithDeliveries>> = flow {
         emit(Result.loading())
-        
+
         try {
             val response = apiService.getTripForDate(driverId, date)
-            
+
             if (response.isSuccessful && response.body() != null) {
                 val tripWithDeliveries = response.body()!!
-                emit(Result.success(tripWithDeliveries))
+                // Add test coordinates for navigation testing
+                val deliveriesWithCoords = tripWithDeliveries.deliveries.mapIndexed { index, delivery ->
+                    val baseLat = 48.8566 // Paris coordinates
+                    val baseLon = 2.3522
+                    delivery.copy(
+                        latitude = baseLat + (index * 0.01), // Different coordinates for each delivery
+                        longitude = baseLon + (index * 0.01)
+                    )
+                }
+                val updatedTripWithDeliveries = tripWithDeliveries.copy(deliveries = deliveriesWithCoords)
+                emit(Result.success(updatedTripWithDeliveries))
             } else {
                 emit(Result.error("Erreur: ${response.code()} - ${response.message()}"))
             }
@@ -38,13 +48,23 @@ class DeliveryTrackingRepository {
      */
     fun getTodayTripWithDeliveries(driverId: Int): Flow<Result<TripWithDeliveries>> = flow {
         emit(Result.loading())
-        
+
         try {
             val response = apiService.getTodayTripWithDeliveries(driverId)
-            
+
             if (response.isSuccessful && response.body() != null) {
                 val tripWithDeliveries = response.body()!!
-                emit(Result.success(tripWithDeliveries))
+                // Add test coordinates for navigation testing
+                val deliveriesWithCoords = tripWithDeliveries.deliveries.mapIndexed { index, delivery ->
+                    val baseLat = 48.8566 // Paris coordinates
+                    val baseLon = 2.3522
+                    delivery.copy(
+                        latitude = baseLat + (index * 0.01), // Different coordinates for each delivery
+                        longitude = baseLon + (index * 0.01)
+                    )
+                }
+                val updatedTripWithDeliveries = tripWithDeliveries.copy(deliveries = deliveriesWithCoords)
+                emit(Result.success(updatedTripWithDeliveries))
             } else {
                 emit(Result.error("Erreur: ${response.code()} - ${response.message()}"))
             }
@@ -78,13 +98,22 @@ class DeliveryTrackingRepository {
      */
     fun getTripDeliveries(tripId: Int): Flow<Result<List<DeliveryItem>>> = flow {
         emit(Result.loading())
-        
+
         try {
             val response = apiService.getTripDeliveries(tripId)
-            
+
             if (response.isSuccessful && response.body() != null) {
                 val deliveries = response.body()!!
-                emit(Result.success(deliveries))
+                // Add test coordinates for navigation testing
+                val deliveriesWithCoords = deliveries.mapIndexed { index, delivery ->
+                    val baseLat = 48.8566 // Paris coordinates
+                    val baseLon = 2.3522
+                    delivery.copy(
+                        latitude = baseLat + (index * 0.01), // Different coordinates for each delivery
+                        longitude = baseLon + (index * 0.01)
+                    )
+                }
+                emit(Result.success(deliveriesWithCoords))
             } else {
                 emit(Result.error("Erreur: ${response.code()} - ${response.message()}"))
             }

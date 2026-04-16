@@ -1,16 +1,10 @@
 package com.example.delivery.screens
 
 import android.content.Context
-import android.net.Uri
 import android.util.Base64
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,15 +12,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -37,22 +28,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil.compose.rememberAsyncImagePainter
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.DeliveryValidationApiService
 import com.example.delivery.network.DeliveryValidationRequest
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.FileOutputStream
-import android.content.ContentValues
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path as AndroidPath
-import android.provider.MediaStore
-import android.os.Environment
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,9 +49,10 @@ fun DeliveryValidationScreen(
     var currentStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var isSigned by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
-    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
     var signerName by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var clientName by remember { mutableStateOf("") }
+    var isLoadingDetails by remember { mutableStateOf(false) }
     // State for Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -77,24 +62,26 @@ fun DeliveryValidationScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
-    // Camera launcher
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success) {
-            println("📸 DEBUG: Photo prise avec succès")
-        } else {
-            println("📸 DEBUG: Échec de la prise de photo")
-        }
-    }
-    
-    // Gallery launcher
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let {
-            capturedImageUri = it
-            println("📸 DEBUG: Image sélectionnée depuis la galerie: $it")
+    // Load shipment details to get client name
+    LaunchedEffect(shipmentId) {
+        shipmentId?.let { id ->
+            isLoadingDetails = true
+            try {
+                val apiService = ApiClient.getRetrofit().create(com.example.delivery.network.ShipmentDetailApiService::class.java)
+                val response = apiService.getShipmentDetails(id)
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val customerName = response.body()?.data?.shipment?.customer?.name
+                    if (customerName != null) {
+                        signerName = customerName
+                        clientName = customerName
+                        println("🔍 DEBUG: Client name loaded: $customerName")
+                    }
+                }
+            } catch (e: Exception) {
+                println("🔍 DEBUG: Error loading shipment details: ${e.message}")
+            } finally {
+                isLoadingDetails = false
+            }
         }
     }
 
@@ -119,96 +106,6 @@ fun DeliveryValidationScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Photo Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.White
-                ),
-                border = BorderStroke(1.dp, Color.LightGray)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Photo de Preuve",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    if (capturedImageUri != null) {
-                        Image(
-                            painter = rememberAsyncImagePainter(capturedImageUri),
-                            contentDescription = "Photo de preuve",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .background(
-                                    Color.White,
-                                    RoundedCornerShape(8.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    Icons.Default.CameraAlt,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Aucune photo",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                val uri = createImageUri(context)
-                                capturedImageUri = uri
-                                cameraLauncher.launch(uri)
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Appareil Photo")
-                        }
-                        
-                        OutlinedButton(
-                            onClick = { galleryLauncher.launch("image/*") },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Photo, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Galerie")
-                        }
-                    }
-                }
-            }
-            
             // Signature Section
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -319,7 +216,6 @@ fun DeliveryValidationScreen(
                     isSigned = false
                     signerName = ""
                     notes = ""
-                    capturedImageUri = null
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -364,27 +260,38 @@ fun DeliveryValidationScreen(
                     Text("Annuler")
                 }
                 
+                // Returns Button
+                OutlinedButton(
+                    onClick = {
+                        if (shipmentId != null) {
+                            navController.navigate("returns/$shipmentId")
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFFFF9800)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFFF9800))
+                ) {
+                    Text("Retours")
+                }
+                
                 // Validate Button
                 Button(
                     onClick = {
-                        if (isSigned && capturedImageUri != null && shipmentId != null && signerName.isNotBlank()) {
+                        if (isSigned && shipmentId != null && signerName.isNotBlank()) {
                             scope.launch {
                                 isLoading = true
                                 try {
                                     println("🔍 DEBUG: Starting conversion process...")
-                                    println("🔍 DEBUG: isSigned=$isSigned, capturedImageUri=$capturedImageUri, shipmentId=$shipmentId, signerName='$signerName'")
+                                    println("🔍 DEBUG: isSigned=$isSigned, shipmentId=$shipmentId, signerName='$signerName'")
                                     
                                     val signatureBase64 = captureSignatureAsBase64(signatureStrokes, currentStroke)
                                     println("🔍 DEBUG: signatureBase64 result: ${if (signatureBase64 != null) "SUCCESS (${signatureBase64.length} chars)" else "NULL"}")
                                     
-                                    val imageBase64 = capturedImageUri?.let { uri ->
-                                        uriToBase64(context, uri)
-                                    }
-                                    println("🔍 DEBUG: imageBase64 result: ${if (imageBase64 != null) "SUCCESS (${imageBase64.length} chars)" else "NULL"}")
-                                    
-                                    if (signatureBase64 == null || imageBase64 == null) {
-                                        println("🔍 DEBUG: Conversion failed - signatureBase64=$signatureBase64, imageBase64=$imageBase64")
-                                        snackbarHostState.showSnackbar("Erreur lors de la conversion des images")
+                                    if (signatureBase64 == null) {
+                                        println("🔍 DEBUG: Conversion failed - signatureBase64=$signatureBase64")
+                                        snackbarHostState.showSnackbar("Erreur lors de la conversion de la signature")
                                         isLoading = false
                                         return@launch
                                     }
@@ -395,13 +302,12 @@ fun DeliveryValidationScreen(
                                     println("🔍 DEBUG: shipmentId = $shipmentId")
                                     println("🔍 DEBUG: signerName = '$signerName'")
                                     println("🔍 DEBUG: signatureBase64 length = ${signatureBase64.length}")
-                                    println("🔍 DEBUG: imageBase64 length = ${imageBase64.length}")
                                     
                                     val request = DeliveryValidationRequest(
                                         shipmentId = shipmentId,
                                         signerName = signerName,
                                         signatureData = signatureBase64,
-                                        imageData = imageBase64,
+                                        imageData = null,
                                         notes = notes.takeIf { it.isNotBlank() }
                                     )
                                     
@@ -427,7 +333,7 @@ fun DeliveryValidationScreen(
                             }
                         }
                     },
-                    enabled = isSigned && capturedImageUri != null && signerName.isNotBlank() && !isLoading && shipmentId != null,
+                    enabled = isSigned && signerName.isNotBlank() && !isLoading && shipmentId != null,
                     modifier = Modifier.weight(1f)
                 ) {
                     if (isLoading) {
@@ -450,7 +356,7 @@ fun DeliveryValidationScreen(
             // Requirements Status
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isSigned && capturedImageUri != null && signerName.isNotBlank()) 
+                    containerColor = if (isSigned && signerName.isNotBlank()) 
                         MaterialTheme.colorScheme.primaryContainer 
                     else 
                         MaterialTheme.colorScheme.surfaceVariant
@@ -465,7 +371,7 @@ fun DeliveryValidationScreen(
                     Text(
                         text = "Statut de validation:",
                         fontWeight = FontWeight.Bold,
-                        color = if (isSigned && capturedImageUri != null && signerName.isNotBlank())
+                        color = if (isSigned && signerName.isNotBlank())
                             MaterialTheme.colorScheme.onPrimaryContainer
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -495,25 +401,6 @@ fun DeliveryValidationScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = if (capturedImageUri != null) Icons.Default.Check else Icons.Default.Clear,
-                            contentDescription = null,
-                            tint = if (capturedImageUri != null) Color.Green else Color.Red,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Photo de preuve",
-                            color = if (capturedImageUri != null)
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
                             imageVector = if (isSigned) Icons.Default.Check else Icons.Default.Clear,
                             contentDescription = null,
                             tint = if (isSigned) Color.Green else Color.Red,
@@ -528,7 +415,7 @@ fun DeliveryValidationScreen(
                         )
                     }
                     
-                    if (!isSigned || capturedImageUri == null || signerName.isBlank()) {
+                    if (!isSigned || signerName.isBlank()) {
                         Text(
                             text = "Veuillez compléter tous les éléments obligatoires pour valider",
                             style = MaterialTheme.typography.bodySmall,
@@ -539,7 +426,7 @@ fun DeliveryValidationScreen(
                     
                     // DEBUG: Show button state
                     Text(
-                        text = "DEBUG: isSigned=$isSigned, photo=${capturedImageUri != null}, nom=${signerName.isNotBlank()}, shipment=${shipmentId != null}",
+                        text = "DEBUG: isSigned=$isSigned, nom=${signerName.isNotBlank()}, shipment=${shipmentId != null}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 4.dp)
@@ -628,57 +515,6 @@ fun captureSignatureAsBase64(strokes: List<List<Offset>>, currentStroke: List<Of
         println("🔍 DEBUG: Signature Base64 generated: length=${base64String.length}, startsWith=${base64String.startsWith("data:image/png;base64,")}")
         return base64String
     } catch (e: Exception) {
-        e.printStackTrace()
-        null
-    }
-}
-
-// Function to create image URI for camera
-fun createImageUri(context: Context): Uri {
-    val timestamp = System.currentTimeMillis()
-    val filename = "delivery_proof_$timestamp.jpg"
-    
-    // Use MediaStore to create a proper image URI
-    val contentValues = ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, filename)
-        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Delivery")
-        put(MediaStore.Images.Media.IS_PENDING, 1)
-    }
-    
-    val imageUri = context.contentResolver.insert(
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        contentValues
-    )
-    
-    return imageUri ?: throw IllegalStateException("Failed to create image URI")
-}
-
-// Function to convert URI to Base64
-fun uriToBase64(context: Context, uri: Uri): String? {
-    return try {
-        println("🔍 DEBUG: Converting URI to Base64: $uri")
-        val inputStream = context.contentResolver.openInputStream(uri)
-        val bitmap = BitmapFactory.decodeStream(inputStream)
-        inputStream?.close()
-        
-        if (bitmap == null) {
-            println("🔍 DEBUG: Failed to decode bitmap from URI")
-            return null
-        }
-        
-        println("🔍 DEBUG: Bitmap decoded: width=${bitmap.width}, height=${bitmap.height}")
-        
-        val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
-        val byteArray = stream.toByteArray()
-        stream.close()
-        
-        val base64String = "data:image/jpeg;base64,${Base64.encodeToString(byteArray, Base64.NO_WRAP)}"
-        println("🔍 DEBUG: Image Base64 generated: length=${base64String.length}, startsWith=${base64String.startsWith("data:image/jpeg;base64,")}")
-        return base64String
-    } catch (e: Exception) {
-        println("🔍 DEBUG: Exception in uriToBase64: ${e.message}")
         e.printStackTrace()
         null
     }

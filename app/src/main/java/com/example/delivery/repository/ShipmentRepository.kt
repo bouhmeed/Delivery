@@ -3,6 +3,7 @@ package com.example.delivery.repository
 import com.example.delivery.models.ShipmentSearchResponse
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.ShipmentApiService
+import com.example.delivery.network.ShipmentDatesResponse
 import com.example.delivery.network.StatusUpdateRequest
 import com.example.delivery.network.StatusUpdateRequestV2
 import com.example.delivery.network.StatusUpdateResponse
@@ -123,6 +124,35 @@ class ShipmentRepository {
             }
         } catch (e: Exception) {
             println("❌ Repository: Exception lors de la mise à jour du statut v2 - ${e.message}")
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Obtenir les dates des expéditions pour un chauffeur (pour le calendrier)
+     */
+    suspend fun getShipmentDates(driverId: Int): Result<ShipmentDatesResponse> {
+        return try {
+            println("📅 Repository: Chargement dates d'expéditions pour driver $driverId")
+            val response = apiService.getShipmentDates(driverId)
+            
+            if (response.isSuccessful && response.body() != null) {
+                val responseBody = response.body()!!
+                if (responseBody.success) {
+                    println("✅ Repository: ${responseBody.data.size} dates d'expéditions récupérées")
+                } else {
+                    println("⚠️ Repository: success=false - ${responseBody.message}")
+                }
+                Result.success(responseBody)
+            } else {
+                val errorCode = response.code()
+                val errorMessage = response.errorBody()?.string() ?: response.message()
+                val errorDetails = "Erreur $errorCode: $errorMessage"
+                println("❌ Repository: Échec chargement dates - $errorDetails")
+                Result.failure(Exception(errorDetails))
+            }
+        } catch (e: Exception) {
+            println("❌ Repository: Exception getShipmentDates - ${e.message}")
             Result.failure(e)
         }
     }

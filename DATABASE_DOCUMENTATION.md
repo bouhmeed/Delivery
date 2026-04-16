@@ -434,6 +434,11 @@ Record 1: {
 - **requestedPickup**: timestamp without time zone NULL - Requested pickup time
 - **requestedDelivery**: timestamp without time zone NULL - Requested delivery time
 - **status**: USER-DEFINED NOT NULL DEFAULT 'TO_PLAN'::"ShipmentStatus" - Shipment status (enum)
+enum ShipmentStatus {
+  TO_PLAN
+  EXPEDITION
+  DELIVERED
+}
 - **description**: text NOT NULL - Shipment description
 - **quantity**: integer NOT NULL - Total quantity
 - **uom**: text NOT NULL - Unit of measurement

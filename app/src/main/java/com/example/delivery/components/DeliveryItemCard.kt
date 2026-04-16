@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import android.content.Intent
+import android.net.Uri
 import com.example.delivery.models.DeliveryItem
 import com.example.delivery.ui.DesignSystem
 import kotlinx.coroutines.delay
@@ -47,7 +49,8 @@ fun DeliveryItemCard(
     onNavigateClick: (DeliveryItem) -> Unit = {},
     onValidationClick: (DeliveryItem) -> Unit = {},
     onCallClick: (DeliveryItem) -> Unit = {},
-    onStatusChange: (DeliveryItem, String) -> Unit = { _, _ -> }
+    onStatusChange: (DeliveryItem, String) -> Unit = { _, _ -> },
+    onReturnsClick: (DeliveryItem) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -462,11 +465,11 @@ fun DeliveryItemCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(DesignSystem.Sizes.SPACING_SMALL)
                 ) {
-                    // Navigate button - Internal navigation with TomTom SDK
+                    // Navigate button - Web navigation with TomTom
                     Button(
-                        onClick = { 
-                            println("🗺️ Bouton Itinéraire cliqué - Navigation interne!")
-                            onNavigateClick(delivery)
+                        onClick = {
+                            println("🗺️ Bouton Itinéraire cliqué - Navigation web TomTom!")
+                            openTomTomWebNavigation(context, delivery)
                         },
                         modifier = Modifier
                             .weight(0.9f)
@@ -682,5 +685,53 @@ private fun formatAddress(address: String?, city: String?, postalCode: String?):
         postalCode,
         city
     )
-    return if (parts.isNotEmpty()) parts.joinToString(", ") else "Adresse non disponible"
+    return parts.joinToString(", ")
+}
+
+// Web navigation functions
+private fun openTomTomWebNavigation(context: android.content.Context, delivery: DeliveryItem) {
+    val lat = delivery.latitude
+    val lon = delivery.longitude
+
+    if (lat == null || lon == null) {
+        println("❌ Coordinates not available for navigation")
+        return
+    }
+
+    val apiKey = "c92wOsiK2ds07Gzq9ZJXNRyyWeQhSYse"
+    val url = "https://plan.tomtom.com/en/route/plan/?key=$apiKey&to=$lat,$lon"
+
+    println("🌐 Opening TomTom web navigation:")
+    println("📍 Destination: $lat, $lon")
+    println("🔗 URL: $url")
+
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        val packageManager = context.packageManager
+        val activities = packageManager.queryIntentActivities(intent, 0)
+
+        if (activities.isNotEmpty()) {
+            context.startActivity(intent)
+            println("✅ TomTom web navigation opened successfully")
+        } else {
+            println("⚠️ No browser found, trying Google Maps fallback")
+            openGoogleMapsFallback(context, lat, lon)
+        }
+    } catch (e: Exception) {
+        println("❌ Failed to open TomTom web navigation: ${e.message}")
+        openGoogleMapsFallback(context, lat, lon)
+    }
+}
+
+private fun openGoogleMapsFallback(context: android.content.Context, lat: Double, lon: Double) {
+    val url = "https://maps.google.com/maps?q=$lat,$lon"
+    println("🔄 Opening Google Maps fallback: $url")
+
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        context.startActivity(intent)
+        println("✅ Google Maps opened successfully")
+    } catch (e: Exception) {
+        println("❌ Failed to open Google Maps: ${e.message}")
+    }
 }

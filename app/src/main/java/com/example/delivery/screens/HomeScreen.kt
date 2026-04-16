@@ -53,6 +53,7 @@ import com.example.delivery.models.ShipmentSearchState
 import com.example.delivery.models.ShipmentSearchData
 import com.example.delivery.screens.ManualEntryDialog
 import com.example.delivery.screens.ShipmentDetailScreen
+import com.example.delivery.screens.BarcodeScannerScreen
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)

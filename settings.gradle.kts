@@ -19,13 +19,14 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // TomTom repository for SDK - TEMPORARILY DISABLED due to missing Maven credentials
-        // Uncomment when TomTom SDK credentials are available
-        /*
+        // TomTom Maven repository with credentials
         maven {
             url = uri("https://repositories.tomtom.com/artifactory/maven")
+            credentials {
+                username = providers.gradleProperty("repositoriesTomtomComUsername").get()
+                password = providers.gradleProperty("repositoriesTomtomComPassword").get()
+            }
         }
-        */
     }
 }
 

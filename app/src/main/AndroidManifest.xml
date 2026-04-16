@@ -23,12 +23,6 @@
         android:networkSecurityConfig="@xml/network_security_config"
         tools:replace="android:allowBackup,android:theme,android:networkSecurityConfig">
         
-        <!-- TomTom API Key - TEMPORARILY DISABLED due to missing Maven credentials -->
-        <!--
-        <meta-data
-            android:name="com.tomtom.sdk.API_KEY"
-            android:value="${TOMTOM_API_KEY}" />
-        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -57,6 +51,17 @@
                     android:scheme="${auth0Scheme}" />
             </intent-filter>
         </activity>
+
+        <!-- FileProvider for camera image capture -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

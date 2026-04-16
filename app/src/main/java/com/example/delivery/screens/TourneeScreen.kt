@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -609,7 +610,6 @@ fun TourneeCalendarDay(
         colors = CardDefaults.cardColors(
             containerColor = when {
                 isSelected -> MaterialTheme.colorScheme.primary
-                hasTour -> MaterialTheme.colorScheme.primaryContainer
                 else -> MaterialTheme.colorScheme.surface
             }
         ),
@@ -646,6 +646,20 @@ fun TourneeCalendarDay(
                             fontSize = 10.sp
                         )
                     }
+                }
+                
+                // Cercle rouge indicateur pour les jours avec des trips
+                if (hasTour && !isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(
+                                Color.Red,
+                                CircleShape
+                            )
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-2).dp, y = 2.dp)
+                    )
                 }
             }
         }

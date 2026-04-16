@@ -219,4 +219,57 @@ router.get('/complete', async (req, res) => {
   }
 });
 
+// GET /api/shipments/dates/:driverId
+// Obtenir les dates des expéditions pour un chauffeur (pour le calendrier)
+router.get('/dates/:driverId', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    
+    if (!driverId) {
+      return res.status(400).json({
+        success: false,
+        message: "L'ID du chauffeur est requis"
+      });
+    }
+    
+    console.log(`📅 Récupération dates d'expéditions pour driverId=${driverId}`);
+    
+    // Récupérer toutes les dates uniques des trips du chauffeur avec des expéditions
+    const datesQuery = `
+      SELECT DISTINCT 
+        DATE(t."tripDate") as trip_date
+      FROM "Trip" t
+      WHERE t."driverId" = $1
+        AND t."tripDate" IS NOT NULL
+      ORDER BY trip_date ASC
+    `;
+    
+    const datesResult = await pool.query(datesQuery, [driverId]);
+    
+    // Formater les dates au format "yyyy-MM-dd"
+    const shipmentDates = datesResult.rows.map(row => {
+      const date = new Date(row.trip_date);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    });
+    
+    console.log(`✅ ${shipmentDates.length} dates d'expéditions trouvées pour driver ${driverId}`);
+    
+    res.json({
+      success: true,
+      data: shipmentDates,
+      message: `${shipmentDates.length} dates d'expéditions récupérées`
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des dates d\'expéditions:', error);
+    res.status(500).json({
+      success: false,
+      message: "Erreur serveur lors de la récupération des dates d'expéditions"
+    });
+  }
+});
+
 module.exports = router;

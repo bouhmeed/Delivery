@@ -49,7 +49,7 @@ import androidx.compose.material.icons.filled.Refresh
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen(navController: NavController) {
+fun NewHistoryScreen(navController: NavController) {
     val context = LocalContext.current
     val authManager = remember { AuthManager(context) }
     val userEmail = remember { authManager.getUserEmail() }

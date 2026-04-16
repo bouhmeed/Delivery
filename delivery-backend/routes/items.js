@@ -7,13 +7,22 @@ router.get('/', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT * FROM "Item"
+      WHERE "isActive" = true
       ORDER BY "createdAt" DESC
       LIMIT 100
     `);
-    res.json(result.rows);
+    res.json({
+      success: true,
+      data: result.rows,
+      message: null
+    });
   } catch (error) {
     console.error('Error fetching items:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      success: false,
+      data: [],
+      message: error.message
+    });
   }
 });
 
