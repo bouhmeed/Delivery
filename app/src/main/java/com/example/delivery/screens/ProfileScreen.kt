@@ -212,11 +212,6 @@ fun ProfileScreen(navController: NavController) {
             // Action Buttons
             item {
                 ProfileActionsCard(
-                    onTestConnection = {
-                        coroutineScope.launch {
-                            testDatabaseConnection(profileApi)
-                        }
-                    },
                     onLogout = {
                         authManager.logout(
                             onSuccess = {
@@ -247,6 +242,11 @@ fun ProfileHeaderCard(
     var editablePhone by remember { mutableStateOf(profile.phone ?: "") }
     var editableEmail by remember { mutableStateOf(userEmail ?: profile.email ?: "") }
     var editableAddress by remember { mutableStateOf(profile.address ?: "") }
+    
+    // Debug logging
+    println("🔍 DEBUG EMAIL - userEmail: $userEmail")
+    println("🔍 DEBUG EMAIL - profile.email: ${profile.email}")
+    println("🔍 DEBUG EMAIL - editableEmail: $editableEmail")
     
     Card(
         modifier = Modifier
@@ -368,7 +368,7 @@ fun ProfileHeaderCard(
                 CompactInfoItem(
                     icon = Icons.Default.Email,
                     label = "Email",
-                    value = userEmail ?: profile.email ?: "Non spécifié",
+                    value = editableEmail.ifBlank { "Non spécifié" },
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.secondary
                 )
@@ -1342,7 +1342,6 @@ fun DetailedStatRow(
 
 @Composable
 fun ProfileActionsCard(
-    onTestConnection: () -> Unit,
     onLogout: () -> Unit
 ) {
     Card(
@@ -1407,15 +1406,6 @@ fun ProfileActionsCard(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Test Connection Button
-                ActionButton(
-                    icon = Icons.Default.Storage,
-                    label = "Test connexion",
-                    description = "Vérifier la connexion à la base de données",
-                    color = MaterialTheme.colorScheme.primary,
-                    onClick = onTestConnection
-                )
-                
                 // Logout Button
                 ActionButton(
                     icon = Icons.Default.Logout,

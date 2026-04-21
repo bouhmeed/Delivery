@@ -110,6 +110,8 @@ fun DeliveryTrackingScreen(
 
     val shipmentDates by viewModel.shipmentDates.collectAsState()
 
+    var searchQuery by remember { mutableStateOf("") }
+
     
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -276,6 +278,48 @@ fun DeliveryTrackingScreen(
 
             
 
+            // Search Bar
+
+            OutlinedTextField(
+
+                value = searchQuery,
+
+                onValueChange = { searchQuery = it },
+
+                placeholder = { Text("Rechercher une livraison...") },
+
+                leadingIcon = {
+
+                    Icon(Icons.Default.Search, contentDescription = "Recherche")
+
+                },
+
+                modifier = Modifier
+
+                    .fillMaxWidth()
+
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+
+                singleLine = true,
+
+                colors = OutlinedTextFieldDefaults.colors(
+
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
+
+                ),
+
+                shape = RoundedCornerShape(12.dp)
+
+            )
+
+            
+
             // Content based on state
 
             when (val state = tripState) {
@@ -315,6 +359,8 @@ fun DeliveryTrackingScreen(
                             trip = state.data.trip,
 
                             deliveries = state.data.deliveries,
+
+                            searchQuery = searchQuery,
 
                             onNavigateToDelivery = onNavigateToDelivery,
 
@@ -424,6 +470,8 @@ private fun TripContent(
 
     deliveries: List<DeliveryItem>,
 
+    searchQuery: String,
+
     onNavigateToDelivery: (DeliveryItem) -> Unit,
 
     onNavigateToMap: (DeliveryItem) -> Unit,
@@ -439,6 +487,18 @@ private fun TripContent(
     onStatusChange: (DeliveryItem, String) -> Unit
 
 ) {
+
+    // Filter deliveries based on search query
+    val filteredDeliveries = if (searchQuery.isBlank()) {
+        deliveries
+    } else {
+        val query = searchQuery.lowercase()
+        deliveries.filter { delivery ->
+            delivery.shipmentNo?.lowercase()?.contains(query) == true ||
+            delivery.clientName?.lowercase()?.contains(query) == true ||
+            delivery.deliveryAddress?.lowercase()?.contains(query) == true
+        }
+    }
 
     LazyColumn(
 
@@ -458,17 +518,17 @@ private fun TripContent(
 
                 stats = DeliveryStats(
 
-                    total = deliveries.size,
+                    total = filteredDeliveries.size,
 
-                    completed = deliveries.count { it.status == "DELIVERED" },
+                    completed = filteredDeliveries.count { it.status == "DELIVERED" },
 
-                    inProgress = deliveries.count { it.status == "EXPEDITION" },
+                    inProgress = filteredDeliveries.count { it.status == "EXPEDITION" },
 
-                    notStarted = deliveries.count { it.status == "TO_PLAN" },
+                    notStarted = filteredDeliveries.count { it.status == "TO_PLAN" },
 
-                    completionPercentage = if (deliveries.isNotEmpty()) {
+                    completionPercentage = if (filteredDeliveries.isNotEmpty()) {
 
-                        (deliveries.count { it.status == "DELIVERED" } * 100 / deliveries.size)
+                        (filteredDeliveries.count { it.status == "DELIVERED" } * 100 / filteredDeliveries.size)
 
                     } else {
 
@@ -486,7 +546,7 @@ private fun TripContent(
 
         // Delivery items
 
-        items(deliveries) { delivery ->
+        items(filteredDeliveries) { delivery ->
 
             DeliveryItemCard(
 

@@ -10,7 +10,7 @@ router.get('/:shipmentId/details', async (req, res) => {
         
         console.log(`📦 Fetch shipment details for ID: ${shipmentId}`);
         
-        // Récupérer les détails du shipment
+        // Récupérer les détails du shipment (champs essentiels uniquement)
         const shipmentQuery = `
             SELECT 
                 id,
@@ -23,27 +23,19 @@ router.get('/:shipmentId/details', async (req, res) => {
                 "requestedPickup",
                 "requestedDelivery",
                 status,
-                description,
+                SUBSTRING(description, 1, 200) as description,
                 quantity,
                 uom,
                 packaging,
                 weight,
-                volume,
-                stackable,
-                carrier,
-                "trackingNumber",
                 "deliveryAddress",
                 "deliveryCity",
                 "deliveryZipCode",
                 "deliveryCountry",
                 "driverId",
                 "vehicleId",
-                "estimatedDuration",
-                "plannedEnd",
-                "plannedStart",
                 "distanceKm",
-                "createdAt",
-                "updatedAt"
+                "createdAt"
             FROM "Shipment"
             WHERE id = $1
         `;
@@ -144,55 +136,68 @@ router.get('/:shipmentId/details', async (req, res) => {
                 console.log('⚠️ Could not fetch destination location:', destinationError.message);
             }
         }
+
+        // Récupérer les preuves de livraison (signature et photo)
+        let deliveryProof = null;
+        const proofQuery = `
+            SELECT 
+                id,
+                "imageUrl",
+                "signatureUrl",
+                "createdAt"
+            FROM "ShipmentProof"
+            WHERE "shipmentId" = $1
+        `;
         
-        // Construire la réponse avec les données de base
+        try {
+            const proofResult = await pool.query(proofQuery, [shipmentId]);
+            if (proofResult.rows.length > 0) {
+                deliveryProof = proofResult.rows[0];
+                console.log(`✅ Delivery proof found for shipment ${shipmentId}`);
+                console.log(`📸 Signature URL: ${deliveryProof.signatureUrl?.substring(0, 50)}...`);
+                console.log(`📸 Image URL: ${deliveryProof.imageUrl?.substring(0, 50)}...`);
+            }
+        } catch (proofError) {
+            console.log('⚠️ Could not fetch delivery proof:', proofError.message);
+        }
+        
+        // Construire la réponse avec les données de base (optimisée)
+        const shipmentData = {
+            id: shipment.id,
+            shipmentNo: shipment.shipmentNo,
+            customerId: shipment.customerId,
+            type: shipment.type,
+            originId: shipment.originId,
+            destinationId: shipment.destinationId,
+            priority: shipment.priority,
+            requestedPickup: shipment.requestedPickup,
+            requestedDelivery: shipment.requestedDelivery,
+            status: shipment.status,
+            description: shipment.description,
+            quantity: shipment.quantity,
+            uom: shipment.uom,
+            packaging: shipment.packaging,
+            weight: shipment.weight,
+            deliveryAddress: shipment.deliveryAddress,
+            deliveryCity: shipment.deliveryCity,
+            deliveryZipCode: shipment.deliveryZipCode,
+            deliveryCountry: shipment.deliveryCountry,
+            driverId: shipment.driverId,
+            vehicleId: shipment.vehicleId,
+            distanceKm: shipment.distanceKm,
+            createdAt: shipment.createdAt
+        };
+
+        // Ajouter les informations optionnelles uniquement si elles existent
+        if (customer) shipmentData.customer = customer;
+        if (origin) shipmentData.origin = origin;
+        if (destination) shipmentData.destination = destination;
+        if (deliveryProof) shipmentData.deliveryProof = deliveryProof;
+
         const response = {
             success: true,
             data: {
-                shipment: {
-                    // Basic shipment info
-                    id: shipment.id,
-                    shipmentNo: shipment.shipmentNo,
-                    customerId: shipment.customerId,
-                    type: shipment.type,
-                    originId: shipment.originId,
-                    destinationId: shipment.destinationId,
-                    priority: shipment.priority,
-                    requestedPickup: shipment.requestedPickup,
-                    requestedDelivery: shipment.requestedDelivery,
-                    status: shipment.status,
-                    description: shipment.description,
-                    quantity: shipment.quantity,
-                    uom: shipment.uom,
-                    packaging: shipment.packaging,
-                    weight: shipment.weight,
-                    volume: shipment.volume,
-                    stackable: shipment.stackable,
-                    carrier: shipment.carrier,
-                    trackingNumber: shipment.trackingNumber,
-                    deliveryAddress: shipment.deliveryAddress,
-                    deliveryCity: shipment.deliveryCity,
-                    deliveryZipCode: shipment.deliveryZipCode,
-                    deliveryCountry: shipment.deliveryCountry,
-                    driverId: shipment.driverId,
-                    vehicleId: shipment.vehicleId,
-                    estimatedDuration: shipment.estimatedDuration,
-                    plannedEnd: shipment.plannedEnd,
-                    plannedStart: shipment.plannedStart,
-                    distanceKm: shipment.distanceKm,
-                    createdAt: shipment.createdAt,
-                    updatedAt: shipment.updatedAt,
-                    
-                    // Informations optionnelles
-                    customer: customer,
-                    origin: origin,
-                    destination: destination,
-                    driver: null,
-                    vehicle: null,
-                    trip: null,
-                    deliveryImages: [],
-                    deliveryDocuments: []
-                }
+                shipment: shipmentData
             }
         };
         

@@ -98,7 +98,11 @@ data class ShipmentDetailFull(
     @SerializedName("deliveryImages")
     val deliveryImages: List<DeliveryImage>,
     @SerializedName("deliveryDocuments")
-    val deliveryDocuments: List<DeliveryDocument>
+    val deliveryDocuments: List<DeliveryDocument>,
+    
+    // Preuve de livraison avec signature
+    @SerializedName("deliveryProof")
+    val deliveryProof: DeliveryProof?
 )
 
 // Client détaillé
@@ -180,6 +184,17 @@ data class DeliveryDocument(
     val signed: Boolean,
     @SerializedName("createdAt")
     val createdAt: String
+)
+
+// Preuve de livraison avec signature
+data class DeliveryProof(
+    val id: Int,
+    @SerializedName("imageUrl")
+    val imageUrl: String?,
+    @SerializedName("signatureUrl")
+    val signatureUrl: String?,
+    @SerializedName("createdAt")
+    val createdAt: String?
 )
 
 // Modèle pour la mise à jour du statut de livraison

@@ -60,13 +60,58 @@ fun NewHistoryScreen(navController: NavController) {
     var selectedStatus by remember { mutableStateOf("Tous") }
     var searchQuery by remember { mutableStateOf("") }
     
+    // États pour les dates personnalisées
+    var customStartDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    var customEndDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+    
+    // DatePickerDialog pour date de début
+    val startDatePickerDialog = android.app.DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            customStartDate = java.time.LocalDate.of(year, month + 1, dayOfMonth)
+        },
+        java.time.LocalDate.now().year,
+        java.time.LocalDate.now().monthValue - 1,
+        java.time.LocalDate.now().dayOfMonth
+    )
+    
+    // DatePickerDialog pour date de fin
+    val endDatePickerDialog = android.app.DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            customEndDate = java.time.LocalDate.of(year, month + 1, dayOfMonth)
+        },
+        java.time.LocalDate.now().year,
+        java.time.LocalDate.now().monthValue - 1,
+        java.time.LocalDate.now().dayOfMonth
+    )
+    
+    // Afficher les DatePickerDialog quand demandé
+    LaunchedEffect(showStartDatePicker) {
+        if (showStartDatePicker) {
+            startDatePickerDialog.show()
+            showStartDatePicker = false
+        }
+    }
+    
+    LaunchedEffect(showEndDatePicker) {
+        if (showEndDatePicker) {
+            endDatePickerDialog.show()
+            showEndDatePicker = false
+        }
+    }
+    
     // Périodes prédéfinies
     val periodOptions = listOf(
         "Toutes les livraisons passées",
+        "Dernière semaine",
         "30 derniers jours",
         "90 derniers jours", 
         "6 derniers mois",
-        "Cette année"
+        "Cette année",
+        "Période personnalisée"
     )
     
     // États pour les données
@@ -174,7 +219,15 @@ fun NewHistoryScreen(navController: NavController) {
                     onSearchChange = { searchQuery = it },
                     selectedPeriod = selectedPeriod,
                     onPeriodChange = { selectedPeriod = it },
-                    periodOptions = periodOptions
+                    periodOptions = periodOptions,
+                    customStartDate = customStartDate,
+                    customEndDate = customEndDate,
+                    onCustomStartDateChange = { customStartDate = it },
+                    onCustomEndDateChange = { customEndDate = it },
+                    showStartDatePicker = showStartDatePicker,
+                    showEndDatePicker = showEndDatePicker,
+                    onShowStartDatePickerChange = { showStartDatePicker = it },
+                    onShowEndDatePickerChange = { showEndDatePicker = it }
                 )
             }
             
@@ -209,20 +262,64 @@ fun NewHistoryScreen(navController: NavController) {
             
             // History list
             driverHistory?.history?.let { history ->
-                if (history.isEmpty()) {
+                // Filter history based on search query
+                val searchFilteredHistory = if (searchQuery.isBlank()) {
+                    history
+                } else {
+                    val query = searchQuery.lowercase()
+                    history.filter { delivery ->
+                        delivery.shipmentNumber?.lowercase()?.contains(query) == true ||
+                        delivery.clientName?.lowercase()?.contains(query) == true ||
+                        delivery.originName?.lowercase()?.contains(query) == true ||
+                        delivery.destinationName?.lowercase()?.contains(query) == true ||
+                        delivery.tripNumber?.lowercase()?.contains(query) == true
+                    }
+                }
+
+                // Filter history based on selected period
+                val periodFilteredHistory = filterByPeriod(searchFilteredHistory, selectedPeriod, customStartDate, customEndDate)
+
+                if (periodFilteredHistory.isEmpty()) {
                     item {
-                        EmptyHistoryState()
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Aucun résultat pour \"$searchQuery\"",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 } else {
                     items(
-                        items = history,
+                        items = periodFilteredHistory,
                         key = { it.shipmentId }
                     ) { delivery ->
                         DeliveryHistoryCard(
                             delivery = delivery,
                             onClick = {
-                                // TODO: Navigate to delivery details
-                                Toast.makeText(context, "Détails de la livraison ${delivery.shipmentNumber}", Toast.LENGTH_SHORT).show()
+                                // Navigate to delivery details
+                                userInfo?.driverId?.let { driverId ->
+                                    val shipmentIdInt = delivery.shipmentId.toIntOrNull() ?: 0
+                                    val driverIdInt = driverId.toIntOrNull() ?: 0
+                                    navController.navigate(Screen.ShipmentDetail.createRoute(shipmentIdInt, driverIdInt))
+                                }
                             }
                         )
                     }
@@ -401,7 +498,15 @@ fun SearchAndFilters(
     onSearchChange: (String) -> Unit,
     selectedPeriod: String,
     onPeriodChange: (String) -> Unit,
-    periodOptions: List<String>
+    periodOptions: List<String>,
+    customStartDate: java.time.LocalDate?,
+    customEndDate: java.time.LocalDate?,
+    onCustomStartDateChange: (java.time.LocalDate?) -> Unit,
+    onCustomEndDateChange: (java.time.LocalDate?) -> Unit,
+    showStartDatePicker: Boolean,
+    showEndDatePicker: Boolean,
+    onShowStartDatePickerChange: (Boolean) -> Unit,
+    onShowEndDatePickerChange: (Boolean) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     
@@ -526,6 +631,73 @@ fun SearchAndFilters(
                                     },
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
+                            }
+                        }
+                    }
+                    
+                    // Custom date pickers if "Période personnalisée" is selected
+                    if (selectedPeriod == "Période personnalisée") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Date de début
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = customStartDate?.format(
+                                    java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy", java.util.Locale.FRENCH)
+                                ) ?: "",
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("Date de début") },
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    unfocusedBorderColor = Color(0xFF1976D2).copy(alpha = 0.3f),
+                                    focusedBorderColor = Color(0xFF1976D2)
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { onShowStartDatePickerChange(true) },
+                                modifier = Modifier.height(56.dp)
+                            ) {
+                                Text("Choisir")
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Date de fin
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = customEndDate?.format(
+                                    java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy", java.util.Locale.FRENCH)
+                                ) ?: "",
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("Date de fin") },
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    unfocusedBorderColor = Color(0xFF1976D2).copy(alpha = 0.3f),
+                                    focusedBorderColor = Color(0xFF1976D2)
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { onShowEndDatePickerChange(true) },
+                                modifier = Modifier.height(56.dp)
+                            ) {
+                                Text("Choisir")
                             }
                         }
                     }
@@ -800,6 +972,153 @@ private suspend fun loadDriverHistory(
     } catch (e: Exception) {
         onError("Erreur: ${e.message}")
     }
+}
+
+// Helper function to filter history by period
+private fun filterByPeriod(
+    history: List<DeliveryHistoryItem>,
+    selectedPeriod: String,
+    customStartDate: java.time.LocalDate?,
+    customEndDate: java.time.LocalDate?
+): List<DeliveryHistoryItem> {
+    val now = java.time.LocalDate.now()
+    
+    println("🔍 DEBUG: Selected period: $selectedPeriod")
+    println("🔍 DEBUG: Total history items: ${history.size}")
+    
+    return when (selectedPeriod) {
+        "Période personnalisée" -> {
+            if (customStartDate != null && customEndDate != null) {
+                println("🔍 DEBUG: Custom range: $customStartDate to $customEndDate")
+                history.filter { item ->
+                    try {
+                        val itemDate = parseDate(item.tripDate)
+                        if (itemDate != null) {
+                            val result = !itemDate.isBefore(customStartDate) && !itemDate.isAfter(customEndDate)
+                            println("🔍 DEBUG: Item date $itemDate, in range: $result")
+                            result
+                        } else {
+                            false
+                        }
+                    } catch (e: Exception) {
+                        println("❌ DEBUG: Error parsing date ${item.tripDate}: ${e.message}")
+                        false
+                    }
+                }
+            } else {
+                println("🔍 DEBUG: Custom dates not set, returning all")
+                history
+            }
+        }
+        "Dernière semaine" -> {
+            val oneWeekAgo = now.minusWeeks(1)
+            history.filter { item ->
+                try {
+                    println("🔍 DEBUG: Parsing tripDate: ${item.tripDate}")
+                    val itemDate = parseDate(item.tripDate)
+                    if (itemDate != null) {
+                        val result = !itemDate.isBefore(oneWeekAgo)
+                        println("🔍 DEBUG: Item date $itemDate, oneWeekAgo $oneWeekAgo, result: $result")
+                        result
+                    } else {
+                        false
+                    }
+                } catch (e: Exception) {
+                    println("❌ DEBUG: Error parsing date ${item.tripDate}: ${e.message}")
+                    false
+                }
+            }
+        }
+        "30 derniers jours" -> {
+            val thirtyDaysAgo = now.minusDays(30)
+            history.filter { item ->
+                try {
+                    val itemDate = parseDate(item.tripDate)
+                    if (itemDate != null) {
+                        !itemDate.isBefore(thirtyDaysAgo)
+                    } else {
+                        false
+                    }
+                } catch (e: Exception) {
+                    false
+                }
+            }
+        }
+        "90 derniers jours" -> {
+            val ninetyDaysAgo = now.minusDays(90)
+            history.filter { item ->
+                try {
+                    val itemDate = parseDate(item.tripDate)
+                    if (itemDate != null) {
+                        !itemDate.isBefore(ninetyDaysAgo)
+                    } else {
+                        false
+                    }
+                } catch (e: Exception) {
+                    false
+                }
+            }
+        }
+        "6 derniers mois" -> {
+            val sixMonthsAgo = now.minusMonths(6)
+            history.filter { item ->
+                try {
+                    val itemDate = parseDate(item.tripDate)
+                    if (itemDate != null) {
+                        !itemDate.isBefore(sixMonthsAgo)
+                    } else {
+                        false
+                    }
+                } catch (e: Exception) {
+                    false
+                }
+            }
+        }
+        "Cette année" -> {
+            val startOfYear = java.time.LocalDate.of(now.year, 1, 1)
+            history.filter { item ->
+                try {
+                    val itemDate = parseDate(item.tripDate)
+                    if (itemDate != null) {
+                        !itemDate.isBefore(startOfYear)
+                    } else {
+                        false
+                    }
+                } catch (e: Exception) {
+                    false
+                }
+            }
+        }
+        else -> {
+            println("🔍 DEBUG: No filtering for: $selectedPeriod")
+            history // "Toutes les livraisons passées" - no filtering
+        }
+    }
+}
+
+// Helper function to parse date with multiple formats
+private fun parseDate(dateString: String): java.time.LocalDate? {
+    val formats = listOf(
+        "yyyy-MM-dd",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "dd/MM/yyyy",
+        "MM/dd/yyyy"
+    )
+    
+    for (format in formats) {
+        try {
+            val formatter = java.time.format.DateTimeFormatter.ofPattern(format)
+            return java.time.LocalDate.parse(dateString, formatter)
+        } catch (e: Exception) {
+            // Try next format
+        }
+    }
+    
+    println("❌ DEBUG: Failed to parse date with all formats: $dateString")
+    return null
 }
 
 private suspend fun loadDriverStats(

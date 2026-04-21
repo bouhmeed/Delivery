@@ -21,4 +21,7 @@ sealed class Screen(val route: String) {
     object DriverMap : Screen("driverMap/{shipmentId}") {
         fun createRoute(shipmentId: Int) = "driverMap/$shipmentId"
     }
+    object ShipmentDetail : Screen("shipmentDetail/{shipmentId}/{driverId}") {
+        fun createRoute(shipmentId: Int, driverId: Int) = "shipmentDetail/$shipmentId/$driverId"
+    }
 }

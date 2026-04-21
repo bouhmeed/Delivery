@@ -41,19 +41,32 @@ router.post('/proof', async (req, res) => {
             });
         }
 
-        // Insert or update delivery proof
-        const upsertQuery = `
-            INSERT INTO "ShipmentProof" ("shipmentId", "imageUrl", "signatureUrl", "createdAt")
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            ON CONFLICT ("shipmentId") 
-            DO UPDATE SET 
-                "imageUrl" = EXCLUDED."imageUrl",
-                "signatureUrl" = EXCLUDED."signatureUrl",
-                "createdAt" = CURRENT_TIMESTAMP
-            RETURNING id, "shipmentId", "imageUrl", "signatureUrl", "createdAt"
-        `;
+        // Check if delivery proof already exists
+        const existingProofQuery = 'SELECT id, "signatureUrl" FROM "ShipmentProof" WHERE "shipmentId" = $1';
+        const existingProofResult = await client.query(existingProofQuery, [shipmentId]);
 
-        const result = await client.query(upsertQuery, [shipmentId, imageUrl, signatureUrl]);
+        let result;
+        if (existingProofResult.rows.length > 0) {
+            // Update existing proof, preserve signatureUrl if not provided
+            const existingSignatureUrl = existingProofResult.rows[0].signatureUrl;
+            const finalSignatureUrl = signatureUrl || existingSignatureUrl;
+            
+            const updateQuery = `
+                UPDATE "ShipmentProof" 
+                SET "imageUrl" = $1, "signatureUrl" = $2, "createdAt" = CURRENT_TIMESTAMP
+                WHERE "shipmentId" = $3
+                RETURNING id, "shipmentId", "imageUrl", "signatureUrl", "createdAt"
+            `;
+            result = await client.query(updateQuery, [imageUrl, finalSignatureUrl, shipmentId]);
+        } else {
+            // Insert new proof
+            const insertQuery = `
+                INSERT INTO "ShipmentProof" ("shipmentId", "imageUrl", "signatureUrl", "createdAt")
+                VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+                RETURNING id, "shipmentId", "imageUrl", "signatureUrl", "createdAt"
+            `;
+            result = await client.query(insertQuery, [shipmentId, imageUrl, signatureUrl]);
+        }
 
         // Update shipment status to DELIVERED if signature is provided
         if (signatureUrl) {
@@ -152,21 +165,38 @@ router.post('/validate', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Save signature and image data (assuming base64 encoded)
-        const imageUrl = imageData || `data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A`;
+        // Check if delivery proof already exists
+        const existingProofQuery = 'SELECT id, "imageUrl" FROM "ShipmentProof" WHERE "shipmentId" = $1';
+        const existingProofResult = await client.query(existingProofQuery, [shipmentId]);
 
-        // Insert delivery proof
-        const insertProofQuery = `
-            INSERT INTO "ShipmentProof" ("shipmentId", "imageUrl", "signatureUrl", "createdAt")
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            RETURNING id
-        `;
-
-        const proofResult = await client.query(insertProofQuery, [
-            shipmentId,
-            imageUrl,
-            signatureData
-        ]);
+        let proofResult;
+        if (existingProofResult.rows.length > 0) {
+            // Update existing proof, preserve imageUrl if not provided
+            const existingImageUrl = existingProofResult.rows[0].imageUrl;
+            const finalImageUrl = imageData || existingImageUrl;
+            
+            const updateProofQuery = `
+                UPDATE "ShipmentProof" 
+                SET "signatureUrl" = $1, "imageUrl" = $2, "createdAt" = CURRENT_TIMESTAMP
+                WHERE "shipmentId" = $3
+                RETURNING id
+            `;
+            proofResult = await client.query(updateProofQuery, [signatureData, finalImageUrl, shipmentId]);
+        } else {
+            // Insert new proof with provided image or default placeholder
+            const imageUrl = imageData || `data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A`;
+            
+            const insertProofQuery = `
+                INSERT INTO "ShipmentProof" ("shipmentId", "imageUrl", "signatureUrl", "createdAt")
+                VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+                RETURNING id
+            `;
+            proofResult = await client.query(insertProofQuery, [
+                shipmentId,
+                imageUrl,
+                signatureData
+            ]);
+        }
 
         // Update shipment status
         const updateShipmentQuery = `

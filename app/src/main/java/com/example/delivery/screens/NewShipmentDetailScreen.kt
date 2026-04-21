@@ -16,7 +16,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,6 +27,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import java.util.Base64
 import com.example.delivery.models.ShipmentDetailFull
 import com.example.delivery.models.ShipmentDisplayStatus
 import com.example.delivery.models.getDisplayInfo
@@ -565,37 +571,175 @@ private fun ShipmentDetailContent(
             }
         }
         
-        // Message si le colis n'appartient pas à la tournée du chauffeur
-        if (!belongsToCurrentTrip) {
+        // Signature de livraison
+        println("🔍 DEBUG: deliveryProof = ${shipment.deliveryProof}")
+        println("🔍 DEBUG: signatureUrl = ${shipment.deliveryProof?.signatureUrl}")
+        if (shipment.deliveryProof != null && !shipment.deliveryProof.signatureUrl.isNullOrEmpty()) {
+            println("✅ DEBUG: Showing signature card")
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFFFF3CD)
+                    containerColor = Color.White
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = Color(0xFF856404),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Ce colis ne fait pas partie de votre tournée actuelle",
-                        color = Color(0xFF856404),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
+                        text = "Signature de livraison",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1976D2),
+                        modifier = Modifier.padding(bottom = 12.dp)
                     )
+                    
+                    // Display signature image by decoding base64
+                    val signatureUrl = shipment.deliveryProof.signatureUrl
+                    println("🔍 Signature URL length: ${signatureUrl.length}")
+                    
+                    // Extract base64 data from data URL
+                    val base64Data = if (signatureUrl.startsWith("data:image")) {
+                        signatureUrl.substringAfter("base64,")
+                    } else {
+                        signatureUrl
+                    }
+                    
+                    // Decode base64 to bitmap
+                    val imageBitmap = remember(base64Data) {
+                        try {
+                            val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            println("📏 Bitmap dimensions: ${bitmap?.width}x${bitmap?.height}")
+                            bitmap?.asImageBitmap()
+                        } catch (e: Exception) {
+                            println("❌ Error decoding signature: ${e.message}")
+                            null
+                        }
+                    }
+                    
+                    if (imageBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = imageBitmap,
+                            contentDescription = "Signature du client",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 1500.dp)
+                                .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Impossible de charger la signature",
+                                color = Color.Red,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    
+                    if (shipment.deliveryProof.createdAt != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Signé le: ${shipment.deliveryProof.createdAt}",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
                 }
             }
+        }
+        
+        // Photo de preuve de livraison
+        if (shipment.deliveryProof != null && !shipment.deliveryProof.imageUrl.isNullOrEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = "Photo de preuve de livraison",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1976D2),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    
+                    // Display proof photo by decoding base64
+                    val imageUrl = shipment.deliveryProof.imageUrl
+                    println("🔍 Image URL length: ${imageUrl.length}")
+                    
+                    // Extract base64 data from data URL
+                    val imageBase64Data = if (imageUrl.startsWith("data:image")) {
+                        imageUrl.substringAfter("base64,")
+                    } else {
+                        imageUrl
+                    }
+                    
+                    // Decode base64 to bitmap
+                    val proofImageBitmap = remember(imageBase64Data) {
+                        try {
+                            val bytes = android.util.Base64.decode(imageBase64Data, android.util.Base64.DEFAULT)
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            println("📏 Proof image dimensions: ${bitmap?.width}x${bitmap?.height}")
+                            bitmap?.asImageBitmap()
+                        } catch (e: Exception) {
+                            println("❌ Error decoding proof image: ${e.message}")
+                            null
+                        }
+                    }
+                    
+                    if (proofImageBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = proofImageBitmap,
+                            contentDescription = "Photo de preuve de livraison",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 1500.dp)
+                                .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Impossible de charger la photo de preuve",
+                                color = Color.Red,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            println("❌ DEBUG: Signature card not shown - deliveryProof is null or signatureUrl is empty")
         }
         
         // Boutons d'action

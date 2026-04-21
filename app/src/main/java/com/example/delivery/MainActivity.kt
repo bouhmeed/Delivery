@@ -56,6 +56,8 @@ import com.example.delivery.screens.DeliveryValidationScreen
 
 import com.example.delivery.screens.TripDetailScreen
 
+import com.example.delivery.screens.NewShipmentDetailScreen
+
 // DriverMapScreen disabled - using web navigation instead
 // import com.example.delivery.screens.DriverMapScreen
 
@@ -582,6 +584,33 @@ class MainActivity : ComponentActivity() {
                             )
                             */
 
+                        }
+
+                        composable(
+                            route = Screen.ShipmentDetail.route,
+                            arguments = listOf(
+                                androidx.navigation.navArgument("shipmentId") {
+                                    type = androidx.navigation.NavType.IntType
+                                },
+                                androidx.navigation.navArgument("driverId") {
+                                    type = androidx.navigation.NavType.IntType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val shipmentId = backStackEntry.arguments?.getInt("shipmentId") ?: 0
+                            val driverId = backStackEntry.arguments?.getInt("driverId") ?: 0
+                            
+                            NewShipmentDetailScreen(
+                                shipmentId = shipmentId,
+                                driverId = driverId,
+                                onNavigateBack = {
+                                    navController.popBackStack()
+                                },
+                                onNavigateToMap = { address ->
+                                    // Handle map navigation if needed
+                                },
+                                navController = navController
+                            )
                         }
 
                     }

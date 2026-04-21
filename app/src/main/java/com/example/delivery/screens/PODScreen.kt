@@ -43,6 +43,12 @@ import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
+import com.example.delivery.network.ApiClient
+import com.example.delivery.network.DeliveryProofRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -73,6 +79,41 @@ fun PODScreen(navController: NavController) {
     var recipientName by remember { mutableStateOf("") }
     var specialInstructions by remember { mutableStateOf("") }
     var packageCondition by remember { mutableStateOf("") }
+    
+    // Get shipmentId from navigation arguments
+    val shipmentId = navController.previousBackStackEntry?.arguments?.getString("shipmentId")?.toIntOrNull() ?: 0
+    println("🔍 POD Screen - shipmentId: $shipmentId")
+    
+    // Function to convert bitmap to base64
+    fun bitmapToBase64(bitmap: Bitmap): String {
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, outputStream)
+        val byteArray = outputStream.toByteArray()
+        return "data:image/jpeg;base64," + android.util.Base64.encodeToString(byteArray, android.util.Base64.NO_WRAP)
+    }
+    
+    // Function to convert signature path to base64
+    fun signatureToBase64(path: Path): String {
+        // Create a bitmap from the signature path
+        val bitmap = android.graphics.Bitmap.createBitmap(700, 700, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 8f
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            strokeJoin = android.graphics.Paint.Join.ROUND
+        }
+        
+        val path = android.graphics.Path()
+        // Convert Compose Path to Android Path
+        // Note: This is a simplified conversion - you may need to adjust based on your actual path data
+        
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, outputStream)
+        val byteArray = outputStream.toByteArray()
+        return "data:image/png;base64," + android.util.Base64.encodeToString(byteArray, android.util.Base64.NO_WRAP)
+    }
     
     // Gestion des permissions caméra
     var hasCameraPermission by remember {
@@ -272,7 +313,7 @@ fun PODScreen(navController: NavController) {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(150.dp)
+                                .height(700.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .pointerInput(Unit) {
                                     detectDragGestures(
@@ -705,11 +746,51 @@ fun PODScreen(navController: NavController) {
                     // Bouton de confirmation
                     Button(
                         onClick = {
-                            if (hasSignature && hasPhoto && signatureName.isNotBlank() && !deliveryCompleted) {
+                            println("📸 Confirmation clicked - hasPhoto: $hasPhoto, shipmentId: $shipmentId")
+                            if (hasPhoto && !deliveryCompleted) {
                                 isConfirming = true
-                                // Simuler la confirmation
-                                deliveryCompleted = true
-                                isConfirming = false
+                                
+                                // Convert photo to base64
+                                val photoBase64 = photoBitmap?.let { bitmapToBase64(it) } ?: ""
+                                println("📸 Photo converted to base64, length: ${photoBase64.length}")
+                                
+                                // Call API to save delivery proof (photo only for now)
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    try {
+                                        println("📸 Calling API to save delivery proof...")
+                                        val apiService = ApiClient.getRetrofit().create(com.example.delivery.network.DeliveryValidationApiService::class.java)
+                                        val request = DeliveryProofRequest(
+                                            shipmentId = shipmentId,
+                                            imageUrl = photoBase64,
+                                            signatureUrl = null // Signature needs more complex conversion
+                                        )
+                                        val response = apiService.saveDeliveryProof(request)
+                                        
+                                        println("📸 API response: ${response.isSuccessful}, body: ${response.body()}")
+                                        
+                                        if (response.isSuccessful && response.body()?.success == true) {
+                                            // Success
+                                            println("✅ Delivery proof saved successfully")
+                                            CoroutineScope(Dispatchers.Main).launch {
+                                                deliveryCompleted = true
+                                                isConfirming = false
+                                                navController.popBackStack()
+                                            }
+                                        } else {
+                                            // Error
+                                            println("❌ Error saving delivery proof: ${response.message()}, body: ${response.body()}")
+                                            CoroutineScope(Dispatchers.Main).launch {
+                                                isConfirming = false
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        println("❌ Exception saving delivery proof: ${e.message}")
+                                        e.printStackTrace()
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            isConfirming = false
+                                        }
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier

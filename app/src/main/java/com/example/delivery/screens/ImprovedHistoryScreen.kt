@@ -35,6 +35,7 @@ import com.example.delivery.auth.AuthManager
 import com.example.delivery.models.*
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.HistoryApiService
+import com.example.delivery.screens.NewShipmentDetailScreen
 import android.widget.Toast
 import kotlinx.coroutines.launch
 import retrofit2.Response
@@ -68,6 +69,10 @@ fun ImprovedHistoryScreen(navController: NavController) {
     var filteredHistory by remember { mutableStateOf<List<DeliveryHistoryItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    
+    // États pour la navigation vers les détails de livraison
+    var showShipmentDetails by remember { mutableStateOf(false) }
+    var selectedShipmentId by remember { mutableIntStateOf(0) }
     
     // Services API
     val historyApi = remember { ApiClient.instance.create(HistoryApiService::class.java) }
@@ -217,7 +222,8 @@ fun ImprovedHistoryScreen(navController: NavController) {
                         tripKey = tripKey,
                         deliveries = deliveries,
                         onItemClick = { delivery ->
-                            Toast.makeText(context, "Détails: ${delivery.shipmentNumber}", Toast.LENGTH_SHORT).show()
+                            selectedShipmentId = delivery.shipmentId.toIntOrNull() ?: 0
+                            showShipmentDetails = true
                         }
                     )
                 }
@@ -227,6 +233,22 @@ fun ImprovedHistoryScreen(navController: NavController) {
                 }
             }
         }
+    }
+    
+    // Écran de détails de livraison
+    if (showShipmentDetails && userInfo?.driverId != null) {
+        NewShipmentDetailScreen(
+            shipmentId = selectedShipmentId,
+            driverId = userInfo?.driverId?.toIntOrNull() ?: 0,
+            onNavigateBack = {
+                showShipmentDetails = false
+                selectedShipmentId = 0
+            },
+            onNavigateToMap = { address ->
+                // TODO: Implement map navigation if needed
+            },
+            navController = navController
+        )
     }
 }
 

@@ -15,7 +15,7 @@ object ApiClient {
     
     private val okHttpClient by lazy {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.BASIC
         }
         
         OkHttpClient.Builder()
