@@ -42,9 +42,13 @@ import androidx.compose.ui.unit.dp
 
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import androidx.lifecycle.viewmodel.compose.viewModel
+
+import androidx.compose.runtime.rememberCoroutineScope
 
 import androidx.navigation.NavController
 
@@ -111,6 +115,49 @@ fun DeliveryTrackingScreen(
     val shipmentDates by viewModel.shipmentDates.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
+    
+    val context = LocalContext.current
+
+    // Fonction pour ouvrir Google Maps avec tous les points de livraison du jour
+    fun openGoogleMapsWithAllDeliveries(deliveries: List<DeliveryItem>) {
+        // Filtrer les livraisons qui ont des coordonnées
+        val deliveriesWithCoords = deliveries.filter { 
+            it.latitude != null && it.longitude != null 
+        }
+        
+        if (deliveriesWithCoords.isEmpty()) {
+            android.widget.Toast.makeText(
+                context, 
+                "Aucune livraison avec coordonnées GPS", 
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        
+        // Créer l'URL Google Maps avec tous les marqueurs
+        // Format: https://www.google.com/maps/dir/lat1,lng1/lat2,lng2/lat3,lng3/...
+        val coords = deliveriesWithCoords.map { "${it.latitude},${it.longitude}" }
+        val googleMapsUrl = "https://www.google.com/maps/dir/${coords.joinToString("/")}"
+        
+        println("🗺️ Ouverture Google Maps avec ${deliveriesWithCoords.size} points")
+        println("🔗 URL: $googleMapsUrl")
+        
+        // Ouvrir dans le navigateur
+        try {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(googleMapsUrl)
+            )
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            println("❌ Erreur lors de l'ouverture de Google Maps: ${e.message}")
+            android.widget.Toast.makeText(
+                context,
+                "Erreur lors de l'ouverture de Google Maps",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     
 
@@ -202,31 +249,71 @@ fun DeliveryTrackingScreen(
 
                     IconButton(
 
-                        onClick = { viewModel.refresh(driverId) }
+                        onClick = {
+
+                            when (val state = tripState) {
+
+                                is TripWithDeliveriesState.Success -> {
+
+                                    openGoogleMapsWithAllDeliveries(state.data.deliveries)
+
+                                }
+
+                                else -> {
+
+                                    android.widget.Toast.makeText(
+
+                                        context,
+
+                                        "Chargement des livraisons en cours...",
+
+                                        android.widget.Toast.LENGTH_SHORT
+
+                                    ).show()
+
+                                }
+
+                            }
+
+                        }
 
                     ) {
 
-                        if (isRefreshing) {
+                        Icon(
 
-                            CircularProgressIndicator(
+                            imageVector = Icons.Default.Map,
 
-                                modifier = Modifier.size(24.dp),
+                            contentDescription = "Voir carte"
 
-                                strokeWidth = 2.dp
+                        )
 
-                            )
+                    }
 
-                        } else {
+                    IconButton(
 
-                            Icon(
+                        onClick = {
 
-                                imageVector = Icons.Default.Refresh,
+                            scope.launch {
 
-                                contentDescription = "Actualiser"
+                                viewModel.refresh(driverId)
 
-                            )
+                            }
 
-                        }
+                        },
+
+                        enabled = !isRefreshing
+
+                    ) {
+
+                        Icon(
+
+                            imageVector = Icons.Default.Refresh,
+
+                            contentDescription = "Actualiser",
+
+                            modifier = if (isRefreshing) Modifier.size(20.dp) else Modifier.size(24.dp)
+
+                        )
 
                     }
 
@@ -242,174 +329,137 @@ fun DeliveryTrackingScreen(
 
     ) { paddingValues ->
 
-        Column(
-
-            modifier = Modifier
-
-                .fillMaxSize()
-
-                .padding(paddingValues)
-
-        ) {
-
-            // Date Filter Row
-
-            DateFilterRow(
-
-                selectedDate = selectedDate,
-
-                shipmentDates = shipmentDates,
-
-                onDateSelected = { newDate ->
-
-                    viewModel.setSelectedDate(newDate)
-
-                    // Data will be reloaded by LaunchedEffect
-
-                },
-
-                onPreviousDay = { viewModel.goToPreviousDay(driverId) },
-
-                onNextDay = { viewModel.goToNextDay(driverId) },
-
-                onTodayClick = { viewModel.goToToday(driverId) }
-
-            )
-
-            
-
-            // Search Bar
-
-            OutlinedTextField(
-
-                value = searchQuery,
-
-                onValueChange = { searchQuery = it },
-
-                placeholder = { Text("Rechercher une livraison...") },
-
-                leadingIcon = {
-
-                    Icon(Icons.Default.Search, contentDescription = "Recherche")
-
-                },
-
-                modifier = Modifier
-
-                    .fillMaxWidth()
-
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-
-                singleLine = true,
-
-                colors = OutlinedTextFieldDefaults.colors(
-
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-
-                    focusedBorderColor = MaterialTheme.colorScheme.primary
-
-                ),
-
-                shape = RoundedCornerShape(12.dp)
-
-            )
-
-            
-
-            // Content based on state
-
-            when (val state = tripState) {
-
-                is TripWithDeliveriesState.Loading -> {
-
-                    LoadingContent()
-
-                }
-
-                is TripWithDeliveriesState.Error -> {
-
-                    ErrorContent(
-
-                        message = state.message,
-
-                        onRetry = { viewModel.refresh(driverId) }
-
-                    )
-
-                }
-
-                is TripWithDeliveriesState.Success -> {
-
-                    if (state.data.trip == null) {
-
-                        NoTripTodayContent(
-
-                            onRefresh = { viewModel.refresh(driverId) }
-
-                        )
-
+        // Filter deliveries based on search query
+        val filteredDeliveries = when (val state = tripState) {
+            is TripWithDeliveriesState.Success -> {
+                if (state.data.trip == null) {
+                    emptyList()
+                } else {
+                    if (searchQuery.isBlank()) {
+                        state.data.deliveries
                     } else {
-
-                        TripContent(
-
-                            trip = state.data.trip,
-
-                            deliveries = state.data.deliveries,
-
-                            searchQuery = searchQuery,
-
-                            onNavigateToDelivery = onNavigateToDelivery,
-
-                            onNavigateToMap = onNavigateToMap,
-
-                            onValidationClick = onValidationClick,
-
-                            onCallClick = onCallClick,
-
-                            onCompleteDelivery = { delivery ->
-
-                                viewModel.completeDelivery(delivery.shipmentId)
-
-                            },
-
-                            onNavigateToDetails = onNavigateToDelivery,
-
-                            onStatusChange = { delivery, newStatus ->
-
-                                // Utiliser le tripShipmentLinkId si disponible, sinon le shipmentId
-
-                                val tripShipmentLinkId = delivery.tripShipmentLinkId ?: delivery.shipmentId
-
-                                viewModel.updateTripShipmentStatus(tripShipmentLinkId, newStatus, driverId)
-
-                            }
-
-                        )
-
+                        val query = searchQuery.lowercase()
+                        state.data.deliveries.filter { delivery ->
+                            delivery.shipmentNo?.lowercase()?.contains(query) == true ||
+                            delivery.clientName?.lowercase()?.contains(query) == true ||
+                            delivery.deliveryAddress?.lowercase()?.contains(query) == true
+                        }
                     }
-
                 }
+            }
+            else -> emptyList()
+        }
 
-                else -> {
-
-                    // Handle any other states
-
-                    ErrorContent(
-
-                        message = "État inconnu",
-
-                        onRetry = { viewModel.refresh(driverId) }
-
-                    )
-
-                }
-
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Date Filter Row
+            item {
+                DateFilterRow(
+                    selectedDate = selectedDate,
+                    shipmentDates = shipmentDates,
+                    onDateSelected = { newDate ->
+                        viewModel.setSelectedDate(newDate)
+                    },
+                    onPreviousDay = { viewModel.goToPreviousDay(driverId) },
+                    onNextDay = { viewModel.goToNextDay(driverId) },
+                    onTodayClick = { viewModel.goToToday(driverId) }
+                )
             }
 
+            // Search Bar
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Rechercher une livraison...") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = "Recherche")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            // Content based on state
+            when (val state = tripState) {
+                is TripWithDeliveriesState.Loading -> {
+                    item {
+                        LoadingContent()
+                    }
+                }
+                is TripWithDeliveriesState.Error -> {
+                    item {
+                        ErrorContent(
+                            message = state.message,
+                            onRetry = { viewModel.refresh(driverId) }
+                        )
+                    }
+                }
+                is TripWithDeliveriesState.Success -> {
+                    if (state.data.trip == null) {
+                        item {
+                            NoTripTodayContent(
+                                onRefresh = { viewModel.refresh(driverId) }
+                            )
+                        }
+                    } else {
+                        // Stats card
+                        item {
+                            DeliveryStatsCard(
+                                stats = DeliveryStats(
+                                    total = filteredDeliveries.size,
+                                    completed = filteredDeliveries.count { it.status == "DELIVERED" },
+                                    inProgress = filteredDeliveries.count { it.status == "EXPEDITION" },
+                                    notStarted = filteredDeliveries.count { it.status == "TO_PLAN" },
+                                    completionPercentage = if (filteredDeliveries.isNotEmpty()) {
+                                        (filteredDeliveries.count { it.status == "DELIVERED" } * 100 / filteredDeliveries.size)
+                                    } else {
+                                        0
+                                    }
+                                )
+                            )
+                        }
+
+                        // Delivery items
+                        items(filteredDeliveries) { delivery ->
+                            DeliveryItemCard(
+                                delivery = delivery,
+                                onItemClick = onNavigateToDelivery,
+                                onCompleteClick = { viewModel.completeDelivery(delivery.shipmentId) },
+                                onNavigateClick = onNavigateToMap,
+                                onValidationClick = onValidationClick,
+                                onCallClick = onCallClick,
+                                onStatusChange = { deliveryItem, newStatus ->
+                                    val tripShipmentLinkId = deliveryItem.tripShipmentLinkId ?: deliveryItem.shipmentId
+                                    viewModel.updateTripShipmentStatus(tripShipmentLinkId, newStatus, driverId)
+                                }
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    item {
+                        ErrorContent(
+                            message = "État inconnu",
+                            onRetry = { viewModel.refresh(driverId) }
+                        )
+                    }
+                }
+            }
         }
 
     }
@@ -460,195 +510,6 @@ private fun LoadingContent(modifier: Modifier = Modifier) {
 
 }
 
-
-
-@Composable
-
-private fun TripContent(
-
-    trip: com.example.delivery.models.Trip,
-
-    deliveries: List<DeliveryItem>,
-
-    searchQuery: String,
-
-    onNavigateToDelivery: (DeliveryItem) -> Unit,
-
-    onNavigateToMap: (DeliveryItem) -> Unit,
-
-    onValidationClick: (DeliveryItem) -> Unit,
-
-    onCallClick: (DeliveryItem) -> Unit,
-
-    onCompleteDelivery: (DeliveryItem) -> Unit,
-
-    onNavigateToDetails: (DeliveryItem) -> Unit,
-
-    onStatusChange: (DeliveryItem, String) -> Unit
-
-) {
-
-    // Filter deliveries based on search query
-    val filteredDeliveries = if (searchQuery.isBlank()) {
-        deliveries
-    } else {
-        val query = searchQuery.lowercase()
-        deliveries.filter { delivery ->
-            delivery.shipmentNo?.lowercase()?.contains(query) == true ||
-            delivery.clientName?.lowercase()?.contains(query) == true ||
-            delivery.deliveryAddress?.lowercase()?.contains(query) == true
-        }
-    }
-
-    LazyColumn(
-
-        modifier = Modifier.fillMaxSize(),
-
-        contentPadding = PaddingValues(vertical = 8.dp),
-
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-
-    ) {
-
-        // Stats card
-
-        item {
-
-            DeliveryStatsCard(
-
-                stats = DeliveryStats(
-
-                    total = filteredDeliveries.size,
-
-                    completed = filteredDeliveries.count { it.status == "DELIVERED" },
-
-                    inProgress = filteredDeliveries.count { it.status == "EXPEDITION" },
-
-                    notStarted = filteredDeliveries.count { it.status == "TO_PLAN" },
-
-                    completionPercentage = if (filteredDeliveries.isNotEmpty()) {
-
-                        (filteredDeliveries.count { it.status == "DELIVERED" } * 100 / filteredDeliveries.size)
-
-                    } else {
-
-                        0
-
-                    }
-
-                )
-
-            )
-
-        }
-
-        
-
-        // Delivery items
-
-        items(filteredDeliveries) { delivery ->
-
-            DeliveryItemCard(
-
-                delivery = delivery,
-
-                onItemClick = onNavigateToDetails,
-
-                onCompleteClick = onCompleteDelivery,
-
-                onNavigateClick = onNavigateToMap,
-
-                onValidationClick = onValidationClick,
-
-                onCallClick = onCallClick,
-
-                onStatusChange = onStatusChange
-
-            )
-
-        }
-
-    }
-
-}
-
-
-
-@Composable
-
-private fun TripInfoCard(
-
-    trip: com.example.delivery.models.Trip,
-
-    modifier: Modifier = Modifier
-
-) {
-
-    Card(
-
-        modifier = modifier,
-
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-
-    ) {
-
-        Column(
-
-            modifier = Modifier
-
-                .fillMaxWidth()
-
-                .padding(16.dp)
-
-        ) {
-
-            Text(
-
-                text = "Tournée du jour",
-
-                style = MaterialTheme.typography.titleMedium,
-
-                fontWeight = FontWeight.Bold
-
-            )
-
-            
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            
-
-            trip.tripId?.let { tripId ->
-
-                Text(
-
-                    text = "ID: $tripId",
-
-                    style = MaterialTheme.typography.bodyMedium,
-
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-
-                )
-
-            }
-
-            
-
-            Text(
-
-                text = "Statut: ${getTripStatusText(trip.status)}",
-
-                style = MaterialTheme.typography.bodyMedium,
-
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-
-            )
-
-        }
-
-    }
-
-}
 
 
 
