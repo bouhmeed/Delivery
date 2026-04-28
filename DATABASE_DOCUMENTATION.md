@@ -1,9 +1,7 @@
 # Database Documentation
 
 This document contains the structure and documentation for the PostgreSQL database tables in the Delivery application.
-
 ---
-
 ## Table: Client
 
 **Description**: Stores information about clients/customers who receive deliveries.
@@ -428,7 +426,7 @@ Record 1: {
 - **shipmentNo**: text NULL - Unique shipment number
 - **customerId**: integer NULL - Foreign key to Client table
 - **type**: USER-DEFINED NOT NULL - Shipment type (enum: OUTBOUND, INBOUND, TRANSFER)
-- **originId**: integer NOT NULL - Foreign key to Location table (origin)
+- **originId**: integer NOT NULL - Foreign key to Location table (origin) - Depot/warehouse location where driver picks up items for delivery
 - **destinationId**: integer NOT NULL - Foreign key to Location table (destination)
 - **priority**: USER-DEFINED NOT NULL - Shipment priority (enum)
 - **requestedPickup**: timestamp without time zone NULL - Requested pickup time
@@ -641,6 +639,14 @@ Record 1: {
 - **driverId**: integer NULL - Foreign key to Driver table
 - **vehicleId**: integer NULL - Foreign key to Vehicle table
 - **status**: USER-DEFINED NOT NULL DEFAULT 'PLANNING'::"TripStatus" - Trip status (enum)
+enum TripStatus {
+  PLANNING
+  READY
+  VALIDATED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
 - **tenantId**: integer NOT NULL - Foreign key to Tenant table
 - **createdAt**: timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP - Record creation timestamp
 - **tripId**: text NULL - Unique trip identifier
@@ -693,6 +699,7 @@ Record 1: {
 - **shipmentId**: integer NOT NULL - Foreign key to Shipment table
 - **role**: USER-DEFINED NOT NULL - Role type (enum)
 - **status**: text NOT NULL DEFAULT 'NON_DEMARRE'::text - Execution status
+Possible values: ASSIGNED, NON_DEMARRE, EN_COURS, LIVRE, TERMINE
 - **podDone**: boolean NOT NULL DEFAULT false - Proof of delivery completed
 - **returnsDone**: boolean NOT NULL DEFAULT false - Returns completed
 - **sequence**: integer NULL - Sequence order within trip

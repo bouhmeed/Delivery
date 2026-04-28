@@ -28,5 +28,17 @@ data class Trip(
     val createdAt: String?,
     
     @SerializedName("tripId")
-    val tripId: String?
+    val tripId: String?,
+    
+    @SerializedName("depotName")
+    val depotName: String? = null,
+    
+    @SerializedName("depotAddress")
+    val depotAddress: String? = null,
+    
+    @SerializedName("depotCity")
+    val depotCity: String? = null,
+    
+    @SerializedName("depotPostalCode")
+    val depotPostalCode: String? = null
 )

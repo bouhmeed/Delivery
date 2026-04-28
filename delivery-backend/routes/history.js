@@ -18,7 +18,7 @@ router.get('/driver/:driverId', async (req, res) => {
         s.id as shipment_id,
         s."shipmentNo" as shipment_number,
         s.status as shipment_status,
-        s.description as shipment_description,
+        SUBSTRING(s.description, 1, 200) as shipment_description,
         s.quantity,
         s.uom,
         c.name as client_name,

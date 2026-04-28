@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
         s."shipmentNo",
         s."trackingNumber",
         s.status,
-        s.description,
+        SUBSTRING(s.description, 1, 200) as description,
         s.quantity,
         s."deliveryAddress",
         s."deliveryCity",

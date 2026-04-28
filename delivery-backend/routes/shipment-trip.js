@@ -14,7 +14,7 @@ router.get('/trip/:tripId', async (req, res) => {
             SELECT 
                 s.id,
                 s."shipmentNo",
-                s.description,
+                SUBSTRING(s.description, 1, 200) as description,
                 s."deliveryCity",
                 s."trackingNumber",
                 s.status,

@@ -80,12 +80,38 @@ router.get('/:id/details', async (req, res) => {
 
     // Get shipments for this trip
     const shipmentsResult = await pool.query(`
-      SELECT s.*, 
-             c.name as "customerName",
-             l1.address as "originAddress",
-             l1.city as "originCity",
-             l2.address as "destinationAddress", 
-             l2.city as "destinationCity"
+      SELECT 
+        s.id,
+        s."shipmentNo",
+        s."trackingNumber",
+        s.status,
+        SUBSTRING(s.description, 1, 200) as description,
+        s.quantity,
+        s.uom,
+        s.packaging,
+        s.weight,
+        s."deliveryAddress",
+        s."deliveryCity",
+        s."deliveryZipCode",
+        s."deliveryCountry",
+        s."customerId",
+        s."originId",
+        s."destinationId",
+        s."vehicleId",
+        s.priority,
+        s."requestedPickup",
+        s."requestedDelivery",
+        s."plannedStart",
+        s."plannedEnd",
+        s."distanceKm",
+        s."estimatedDuration",
+        s."createdAt",
+        s."updatedAt",
+        c.name as "customerName",
+        l1.address as "originAddress",
+        l1.city as "originCity",
+        l2.address as "destinationAddress", 
+        l2.city as "destinationCity"
       FROM "TripShipmentLink" tsl
       JOIN "Shipment" s ON tsl."shipmentId" = s."id"
       LEFT JOIN "Client" c ON s."customerId" = c."id"

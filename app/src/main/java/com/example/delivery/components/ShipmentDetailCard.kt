@@ -179,7 +179,8 @@ fun ShipmentDetailCard(
                 Text(
                     text = shipment.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2
                 )
             }
         }

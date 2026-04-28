@@ -7,7 +7,7 @@ router.get('/', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT "id", "shipmentNo", "customerId", "type", "originId", "destinationId",
-             "priority", "requestedPickup", "requestedDelivery", "status", "description",
+             "priority", "requestedPickup", "requestedDelivery", "status", SUBSTRING(description, 1, 200) as description,
              "quantity", "uom", "packaging", "weight", "volume", "stackable",
              "carrier", "trackingNumber", "deliveryAddress", "deliveryCity", 
              "deliveryZipCode", "deliveryCountry", "tenantId", "createdAt", 
@@ -31,7 +31,7 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
     const result = await pool.query(`
       SELECT "id", "shipmentNo", "customerId", "type", "originId", "destinationId",
-             "priority", "requestedPickup", "requestedDelivery", "status", "description",
+             "priority", "requestedPickup", "requestedDelivery", "status", SUBSTRING(description, 1, 200) as description,
              "quantity", "uom", "packaging", "weight", "volume", "stackable",
              "carrier", "trackingNumber", "deliveryAddress", "deliveryCity", 
              "deliveryZipCode", "deliveryCountry", "tenantId", "createdAt", 
@@ -59,7 +59,7 @@ router.get('/status/:status', async (req, res) => {
     const { status } = req.params;
     const result = await pool.query(`
       SELECT "id", "shipmentNo", "customerId", "type", "originId", "destinationId",
-             "priority", "requestedPickup", "requestedDelivery", "status", "description",
+             "priority", "requestedPickup", "requestedDelivery", "status", SUBSTRING(description, 1, 200) as description,
              "quantity", "uom", "packaging", "weight", "volume", "stackable",
              "carrier", "trackingNumber", "deliveryAddress", "deliveryCity", 
              "deliveryZipCode", "deliveryCountry", "tenantId", "createdAt", 
@@ -84,7 +84,7 @@ router.get('/driver/:driverId', async (req, res) => {
     const { driverId } = req.params;
     const result = await pool.query(`
       SELECT "id", "shipmentNo", "customerId", "type", "originId", "destinationId",
-             "priority", "requestedPickup", "requestedDelivery", "status", "description",
+             "priority", "requestedPickup", "requestedDelivery", "status", SUBSTRING(description, 1, 200) as description,
              "quantity", "uom", "packaging", "weight", "volume", "stackable",
              "carrier", "trackingNumber", "deliveryAddress", "deliveryCity", 
              "deliveryZipCode", "deliveryCountry", "tenantId", "createdAt", 

@@ -70,6 +70,8 @@ data class DeliveryItem(
     val status: String,
     val podDone: Boolean,
     val shipmentNo: String,
+    val type: String?, // Shipment type (OUTBOUND, INBOUND, TRANSFER)
+    val originId: Int? = null, // Origin location ID
     val destinationId: Int,
     val deliveryAddress: String?,
     val deliveryCity: String?,
@@ -87,7 +89,12 @@ data class DeliveryItem(
     val tripIdentifier: String? = null, // Added for display purposes
     val tripShipmentLinkId: Int? = null, // ID du TripShipmentLink pour les mises à jour de statut
     val latitude: Double? = null, // Latitude for navigation
-    val longitude: Double? = null // Longitude for navigation
+    val longitude: Double? = null, // Longitude for navigation
+    // Origin information (from originId -> Location)
+    val originName: String? = null,
+    val originAddress: String? = null,
+    val originCity: String? = null,
+    val originPostalCode: String? = null
 )
 
 // Trip with Deliveries Response
