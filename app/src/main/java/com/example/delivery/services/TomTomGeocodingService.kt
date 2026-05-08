@@ -40,12 +40,22 @@ class TomTomGeocodingService {
         country: String? = "France"
     ): GeocodingResult? = withContext(Dispatchers.IO) {
         try {
-            // Construire l'adresse complète
+            // Construire l'adresse complète avec format optimisé pour éviter les confusions
             val fullAddress = buildString {
-                address?.let { append(it).append(", ") }
-                postalCode?.let { append(it).append(" ") }
+                // Format: "Ville, Code Postal, Adresse, Pays" pour plus de précision
                 city?.let { append(it) }
-                country?.let { append(", ").append(it) }
+                if (!postalCode.isNullOrBlank()) {
+                    if (!city.isNullOrBlank()) append(", ")
+                    append(postalCode)
+                }
+                if (!address.isNullOrBlank()) {
+                    if (!city.isNullOrBlank() || !postalCode.isNullOrBlank()) append(", ")
+                    append(address)
+                }
+                country?.let { 
+                    if (!city.isNullOrBlank() || !postalCode.isNullOrBlank() || !address.isNullOrBlank()) append(", ")
+                    append(it) 
+                }
             }
             
             if (fullAddress.isBlank()) {
@@ -55,11 +65,40 @@ class TomTomGeocodingService {
             // Encoder l'adresse pour l'URL
             val encodedAddress = java.net.URLEncoder.encode(fullAddress, "UTF-8")
             
-            // Construire l'URL de l'API TomTom
-            val url = URL("$BASE_URL/$encodedAddress.json?key=$API_KEY")
+            // Déterminer le pays pour le paramètre countrySet.
+            // Important: plusieurs tournées utilisent la Suisse (Lausanne, Genève) avec CP à 4 chiffres.
+            val normalizedCity = city?.trim()?.lowercase()
+            val swissCities = setOf(
+                "zurich", "zürich",
+                "geneve", "genève",
+                "lausanne",
+                "basel", "bâle",
+                "bern", "berne",
+                "luzern", "lucerne",
+                "lugano", "sion"
+            )
+
+            val countrySet = when {
+                country?.contains("Suisse", ignoreCase = true) == true -> "CH"
+                normalizedCity in swissCities -> "CH"
+                // Heuristique: code postal à 4 chiffres = souvent CH/BE.
+                // Si la ville n'est pas explicitement belge, on privilégie CH (cas de ce projet).
+                postalCode?.trim()?.length == 4 && normalizedCity != "bruxelles" && normalizedCity != "brussels" -> "CH"
+
+                country?.contains("Belgique", ignoreCase = true) == true || normalizedCity == "bruxelles" || normalizedCity == "brussels" -> "BE"
+                country?.contains("Italie", ignoreCase = true) == true || normalizedCity == "rome" || normalizedCity == "roma" -> "IT"
+                country?.contains("Espagne", ignoreCase = true) == true || normalizedCity == "madrid" -> "ES"
+                country?.contains("Allemagne", ignoreCase = true) == true || normalizedCity == "berlin" -> "DE"
+                country?.contains("Royaume-Uni", ignoreCase = true) == true || normalizedCity == "londres" || normalizedCity == "london" -> "GB"
+                else -> "FR"
+            }
+            
+            // Construire l'URL de l'API TomTom avec paramètres de pays
+            val url = URL("$BASE_URL/$encodedAddress.json?key=$API_KEY&countrySet=$countrySet")
             
             println("🗺️ Géocodage: $fullAddress")
             println("🔗 URL: $url")
+            println("🌍 CountrySet: $countrySet")
             
             // Faire la requête
             val response = url.readText()
@@ -75,6 +114,7 @@ class TomTomGeocodingService {
                 val formattedAddress = firstResult.optString("address", null)
                 
                 println("✅ Géocodage réussi: $lat, $lon")
+                println("📍 Adresse trouvée: ${formattedAddress ?: "N/A"}")
                 
                 GeocodingResult(lat, lon, formattedAddress)
             } else {

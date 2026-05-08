@@ -45,15 +45,12 @@ import com.example.delivery.models.Vehicle
 import com.example.delivery.network.ApiClient
 import com.example.delivery.viewmodel.TodayTourViewModel
 import com.example.delivery.viewmodel.TodayTourState
-import com.example.delivery.viewmodel.BarcodeScannerViewModel
-import com.example.delivery.models.ScanResult
 import com.example.delivery.viewmodel.ShipmentSearchViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.delivery.models.ShipmentSearchState
 import com.example.delivery.models.ShipmentSearchData
 import com.example.delivery.screens.ManualEntryDialog
 import com.example.delivery.screens.ShipmentDetailScreen
-import com.example.delivery.screens.BarcodeScannerScreen
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,11 +82,6 @@ fun HomeScreen(navController: NavController) {
     var showManualEntryDialog: Boolean by remember { mutableStateOf(false) }
     var showShipmentDetail: Boolean by remember { mutableStateOf(false) }
     var selectedShipmentData: ShipmentSearchData? by remember { mutableStateOf(null) }
-    var showBarcodeScanner: Boolean by remember { mutableStateOf(false) }
-    
-    // Barcode Scanner ViewModel
-    val barcodeScannerViewModel: BarcodeScannerViewModel = viewModel()
-    val scanResult by barcodeScannerViewModel.scanResult
     
     // Récupérer les données utilisateur et chauffeur
     LaunchedEffect(userEmail) {
@@ -108,7 +100,6 @@ fun HomeScreen(navController: NavController) {
                                 val driverIdInt = driverId.toInt()
                                 // Configurer le driverId pour le ViewModel de la tournée
                                 todayTourViewModel.setDriverId(driverIdInt)
-                                shipmentSearchViewModel.setDriverId(driverIdInt)
                                 
                                 val driverRepository = DriverRepository()
                                 driverRepository.getDriverById(driverId)
@@ -293,32 +284,11 @@ fun HomeScreen(navController: NavController) {
             // Actions Rapides - DERNIÈRE CARTE
             item {
                 QuickActionsCard(
-                    onScanBarcode = {
-                        showBarcodeScanner = true
-                        barcodeScannerViewModel.startScanning()
-                    },
                     onManualEntry = {
                         showManualEntryDialog = true
                     }
                 )
             }
-        }
-    }
-    
-    // Gérer les résultats du scan
-    LaunchedEffect(scanResult) {
-        when (val result = scanResult) {
-            is ScanResult.Success -> {
-                showBarcodeScanner = false
-                // TODO: Naviguer vers les détails du colis scanné
-                println("Colis scanné: ${result.shipment}")
-            }
-            is ScanResult.Error -> {
-                showBarcodeScanner = false
-                // TODO: Afficher message d'erreur
-                println("Erreur scan: ${result.message}")
-            }
-            else -> {}
         }
     }
     
@@ -374,19 +344,6 @@ fun HomeScreen(navController: NavController) {
                 println("Navigation vers l'adresse - TODO: GPS")
             },
             navController = navController
-        )
-    }
-    
-    // Écran de scan de codes-barres
-    if (showBarcodeScanner) {
-        BarcodeScannerScreen(
-            onBarcodeScanned = { barcode ->
-                barcodeScannerViewModel.onBarcodeScanned(barcode)
-            },
-            onClose = {
-                showBarcodeScanner = false
-                barcodeScannerViewModel.stopScanning()
-            }
         )
     }
 }

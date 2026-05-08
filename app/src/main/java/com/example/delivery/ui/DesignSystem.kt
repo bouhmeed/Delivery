@@ -29,6 +29,11 @@ object DesignSystem {
         val WARNING_ORANGE_LIGHT = Color(0xFFFFB74D)    // Orange clair
         val WARNING_ORANGE_DARK = Color(0xFFE65100)     // Orange foncé
         
+        // Couleurs d'erreur (Rouge)
+        val DANGER_RED = Color(0xFFD32F2F)              // Rouge erreur
+        val DANGER_RED_LIGHT = Color(0xFFEF5350)        // Rouge clair
+        val DANGER_RED_DARK = Color(0xFFB71C1C)         // Rouge foncé
+        
         // Couleurs de validation
         val VALIDATION_BLUE = Color(0xFF1976D2)        // Bleu validation
         val NAVIGATION_GREEN = Color(0xFF2E7D32)       // Vert navigation

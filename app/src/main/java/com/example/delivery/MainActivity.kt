@@ -283,23 +283,9 @@ class MainActivity : ComponentActivity() {
 
                                     // Navigate to internal driver map screen
 
-
-
                                     navController.navigate(Screen.DriverMap.createRoute(delivery.shipmentId))
-
-
-
                                 },
-
-
-
                                 onValidationClick = { delivery ->
-
-
-
-                                    // Navigate to delivery validation screen with shipmentId
-
-
 
                                     navController.navigate(Screen.DeliveryValidation.createRoute(delivery.shipmentId))
 

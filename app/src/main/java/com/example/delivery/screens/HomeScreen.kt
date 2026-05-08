@@ -33,6 +33,8 @@ import com.example.delivery.components.TodayTourCard
 import com.example.delivery.components.QuickActionsCard
 import com.example.delivery.components.DayIndicatorCard
 import com.example.delivery.components.CurrentDayCard
+import com.example.delivery.components.MaintenanceAlertCard
+import com.example.delivery.components.VehicleMaintenanceSection
 import com.example.delivery.navigation.Screen
 import com.example.delivery.data.DeliveryData
 import com.example.delivery.auth.AuthManager
@@ -42,18 +44,17 @@ import com.example.delivery.repository.VehicleRepository
 import com.example.delivery.models.UserResponse
 import com.example.delivery.models.Driver
 import com.example.delivery.models.Vehicle
+import com.example.delivery.models.VehicleMaintenance
+import com.example.delivery.models.MaintenanceAlert
 import com.example.delivery.network.ApiClient
 import com.example.delivery.viewmodel.TodayTourViewModel
 import com.example.delivery.viewmodel.TodayTourState
-import com.example.delivery.viewmodel.BarcodeScannerViewModel
-import com.example.delivery.models.ScanResult
 import com.example.delivery.viewmodel.ShipmentSearchViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.delivery.models.ShipmentSearchState
 import com.example.delivery.models.ShipmentSearchData
 import com.example.delivery.screens.ManualEntryDialog
 import com.example.delivery.screens.ShipmentDetailScreen
-import com.example.delivery.screens.BarcodeScannerScreen
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,6 +72,8 @@ fun HomeScreen(navController: NavController) {
     var userInfo: UserResponse? by remember { mutableStateOf(null) }
     var driverInfo: Driver? by remember { mutableStateOf(null) }
     var vehicleInfo: Vehicle? by remember { mutableStateOf(null) }
+    var maintenanceAlert: MaintenanceAlert? by remember { mutableStateOf(null) }
+    var vehicleMaintenance: List<VehicleMaintenance> by remember { mutableStateOf(emptyList()) }
     var isLoading: Boolean by remember { mutableStateOf(false) }
     
     // ViewModel pour la tournée du jour
@@ -85,11 +88,6 @@ fun HomeScreen(navController: NavController) {
     var showManualEntryDialog: Boolean by remember { mutableStateOf(false) }
     var showShipmentDetail: Boolean by remember { mutableStateOf(false) }
     var selectedShipmentData: ShipmentSearchData? by remember { mutableStateOf(null) }
-    var showBarcodeScanner: Boolean by remember { mutableStateOf(false) }
-    
-    // Barcode Scanner ViewModel
-    val barcodeScannerViewModel: BarcodeScannerViewModel = viewModel()
-    val scanResult by barcodeScannerViewModel.scanResult
     
     // Récupérer les données utilisateur et chauffeur
     LaunchedEffect(userEmail) {
@@ -106,9 +104,9 @@ fun HomeScreen(navController: NavController) {
                         user.driverId?.let { driverId ->
                             try {
                                 val driverIdInt = driverId.toInt()
+                                
                                 // Configurer le driverId pour le ViewModel de la tournée
                                 todayTourViewModel.setDriverId(driverIdInt)
-                                shipmentSearchViewModel.setDriverId(driverIdInt)
                                 
                                 val driverRepository = DriverRepository()
                                 driverRepository.getDriverById(driverId)
@@ -120,6 +118,24 @@ fun HomeScreen(navController: NavController) {
                                         vehicleRepository.getVehicleByDriverId(driverId)
                                             .onSuccess { vehicle ->
                                                 vehicleInfo = vehicle
+                                                
+                                                // Récupérer les données de maintenance du véhicule
+                                                vehicle?.id?.let { vehicleId ->
+                                                    println("🔧 HomeScreen: Loading maintenance for vehicle ID: $vehicleId")
+                                                    vehicleRepository.getVehicleMaintenance(vehicleId)
+                                                        .onSuccess { maintenance ->
+                                                            println("🔧 HomeScreen: Maintenance loaded successfully: ${maintenance.size} items")
+                                                            vehicleMaintenance = maintenance
+                                                            val alert = vehicleRepository.calculateMaintenanceAlert(maintenance)
+                                                            println("🔧 HomeScreen: Alert calculated: ${alert?.warningLevel}")
+                                                            maintenanceAlert = alert
+                                                        }
+                                                        .onFailure { error ->
+                                                            println("🔧 HomeScreen: Error loading maintenance: ${error.message}")
+                                                        }
+                                                } ?: run {
+                                                    println("🔧 HomeScreen: No vehicle ID found")
+                                                }
                                             }
                                             .onFailure { error ->
                                                 println("Erreur lors de la récupération du véhicule: ${error.message}")
@@ -172,6 +188,16 @@ fun HomeScreen(navController: NavController) {
                     driverInfo = driverInfo,
                     isLoading = isLoading
                 )
+            }
+            
+            // Maintenance Alert Card
+            item {
+                val alert = maintenanceAlert
+                println("🔧 HomeScreen: About to display MaintenanceAlertCard. Alert is null: ${alert == null}")
+                if (alert != null) {
+                    println("🔧 HomeScreen: Alert details - Type: ${alert.type}, Days: ${alert.daysRemaining}, Level: ${alert.warningLevel}")
+                }
+                MaintenanceAlertCard(alert = alert)
             }
             
             // Tournée du jour
@@ -290,13 +316,16 @@ fun HomeScreen(navController: NavController) {
                 }
             }
             
+            // Vehicle Maintenance Section
+            if (vehicleMaintenance.isNotEmpty()) {
+                item {
+                    VehicleMaintenanceSection(maintenance = vehicleMaintenance)
+                }
+            }
+            
             // Actions Rapides - DERNIÈRE CARTE
             item {
                 QuickActionsCard(
-                    onScanBarcode = {
-                        showBarcodeScanner = true
-                        barcodeScannerViewModel.startScanning()
-                    },
                     onManualEntry = {
                         showManualEntryDialog = true
                     }
@@ -305,23 +334,7 @@ fun HomeScreen(navController: NavController) {
         }
     }
     
-    // Gérer les résultats du scan
-    LaunchedEffect(scanResult) {
-        when (val result = scanResult) {
-            is ScanResult.Success -> {
-                showBarcodeScanner = false
-                // TODO: Naviguer vers les détails du colis scanné
-                println("Colis scanné: ${result.shipment}")
-            }
-            is ScanResult.Error -> {
-                showBarcodeScanner = false
-                // TODO: Afficher message d'erreur
-                println("Erreur scan: ${result.message}")
-            }
-            else -> {}
-        }
-    }
-    
+        
     // Gérer les résultats de recherche
     LaunchedEffect(shipmentSearchState) {
         val currentState = shipmentSearchState
@@ -374,19 +387,6 @@ fun HomeScreen(navController: NavController) {
                 println("Navigation vers l'adresse - TODO: GPS")
             },
             navController = navController
-        )
-    }
-    
-    // Écran de scan de codes-barres
-    if (showBarcodeScanner) {
-        BarcodeScannerScreen(
-            onBarcodeScanned = { barcode ->
-                barcodeScannerViewModel.onBarcodeScanned(barcode)
-            },
-            onClose = {
-                showBarcodeScanner = false
-                barcodeScannerViewModel.stopScanning()
-            }
         )
     }
 }

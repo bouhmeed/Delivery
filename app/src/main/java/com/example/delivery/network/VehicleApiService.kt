@@ -1,6 +1,7 @@
 package com.example.delivery.network
 
 import com.example.delivery.models.Vehicle
+import com.example.delivery.models.VehicleMaintenance
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Path
@@ -12,4 +13,7 @@ interface VehicleApiService {
     
     @GET("api/vehicles")
     suspend fun getVehicleByDriverId(@Query("driverId") driverId: String): Response<List<Vehicle>>
+    
+    @GET("api/vehicles/{id}/maintenance")
+    suspend fun getVehicleMaintenance(@Path("id") id: String): Response<List<VehicleMaintenance>>
 }

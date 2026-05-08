@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Test Maintenance Data</title>
+</head>
+<body>
+    <h1>Add Test Maintenance Data for Vehicle 2</h1>
+    <button onclick="addTestData()">Click to add test data</button>
+    <div id="result"></div>
+
+    <script>
+        async function addTestData() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Adding test data...';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/vehicles/add-test-maintenance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <h3>✅ Success!</h3>
+                        <p>${data.message}</p>
+                        <p>Total records: ${data.totalRecords}</p>
+                        <pre>${JSON.stringify(data.records, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <h3>❌ Error</h3>
+                        <p>${data.error}</p>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <h3>❌ Network Error</h3>
+                    <p>${error.message}</p>
+                    <p>Make sure the backend server is running on http://localhost:3000</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

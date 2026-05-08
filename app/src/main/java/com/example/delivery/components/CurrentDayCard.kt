@@ -22,8 +22,8 @@ import java.util.*
 
 @Composable
 fun CurrentDayCard(
-    userInfo: Any?,
-    driverInfo: Any?,
+    userInfo: com.example.delivery.models.UserResponse?,
+    driverInfo: com.example.delivery.models.Driver?,
     isLoading: Boolean
 ) {
     val today = LocalDate.now()
@@ -95,10 +95,7 @@ fun CurrentDayCard(
             
             // Section Informations Utilisateur
             if (!isLoading && userInfo != null) {
-                val userName = when (userInfo) {
-                    is com.example.delivery.models.UserResponse -> "${userInfo.firstName} ${userInfo.lastName}"
-                    else -> "Utilisateur"
-                }
+                val userName = "${userInfo.firstName} ${userInfo.lastName}"
                 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -192,10 +189,7 @@ fun CurrentDayCard(
                             DriverInfoItem(
                                 icon = Icons.Default.Work,
                                 label = "Type",
-                                value = when (driverInfo) {
-                                    is com.example.delivery.models.Driver -> driverInfo.employmentType ?: "FULL_TIME"
-                                    else -> "FULL_TIME"
-                                },
+                                value = driverInfo.employmentType ?: "FULL_TIME",
                                 color = Color(0xFF1976D2)
                             )
                             
@@ -203,10 +197,7 @@ fun CurrentDayCard(
                             DriverInfoItem(
                                 icon = Icons.Default.Person,
                                 label = "Statut",
-                                value = when (driverInfo) {
-                                    is com.example.delivery.models.Driver -> driverInfo.status ?: "ACTIF"
-                                    else -> "ACTIF"
-                                },
+                                value = driverInfo.status ?: "ACTIF",
                                 color = Color(0xFF4CAF50)
                             )
                         }

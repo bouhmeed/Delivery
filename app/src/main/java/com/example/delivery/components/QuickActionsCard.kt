@@ -18,7 +18,6 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun QuickActionsCard(
-    onScanBarcode: () -> Unit,
     onManualEntry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -52,17 +51,15 @@ fun QuickActionsCard(
             
             Spacer(modifier = Modifier.height(20.dp))
             
-            // Boutons d'action
-            Row(
+            // Bouton d'action
+            Box(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                contentAlignment = Alignment.Center
             ) {
-                // Bouton Scanner
                 Button(
-                    onClick = onScanBarcode,
+                    onClick = onManualEntry,
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .height(80.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF1976D2)
@@ -74,52 +71,16 @@ fun QuickActionsCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = "Scanner",
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Entrée manuelle",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Scanner Code",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-                
-                // Bouton Entrée manuelle
-                OutlinedButton(
-                    onClick = onManualEntry,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(80.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF1976D2)
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        2.dp,
-                        Color(0xFF1976D2)
-                    )
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Entrée manuelle",
-                            tint = Color(0xFF1976D2),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
                             text = "Entrer Manuellement",
-                            color = Color(0xFF1976D2),
-                            fontSize = 15.sp,
+                            color = Color.White,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center
                         )

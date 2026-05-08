@@ -44,23 +44,15 @@ import androidx.compose.material3.*
 
 import androidx.compose.material3.ExperimentalMaterial3Api
 
-
-
 import androidx.compose.runtime.*
-
-
 
 import androidx.compose.runtime.mutableIntStateOf
 
-
+import androidx.compose.runtime.rememberCoroutineScope
 
 import androidx.compose.ui.Alignment
 
-
-
 import androidx.compose.ui.Modifier
-
-
 
 import androidx.compose.ui.draw.clip
 
@@ -72,22 +64,15 @@ import androidx.compose.ui.graphics.Color
 
 import androidx.compose.ui.text.font.FontWeight
 
-
-
 import androidx.compose.ui.text.style.TextAlign
-
-
 
 import androidx.compose.ui.unit.dp
 
-
-
 import androidx.compose.ui.unit.sp
 
-
+import androidx.compose.ui.platform.LocalConfiguration
 
 import androidx.compose.ui.platform.LocalContext
-
 
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -126,6 +111,10 @@ import com.example.delivery.components.DateFilterRow
 
 
 
+import com.example.delivery.components.FilterSectionCard
+
+
+
 import com.example.delivery.models.DeliveryItem
 
 
@@ -150,7 +139,21 @@ import com.example.delivery.viewmodel.TripWithDeliveriesState
 
 
 
+import com.example.delivery.viewmodel.FilterState
+
+
+
+import com.example.delivery.viewmodel.SortOption
+
+
+
+import com.example.delivery.viewmodel.SortOrder
+
+
+
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 
@@ -230,38 +233,93 @@ fun DeliveryTrackingScreen(
 
 
 
+    val filterState by viewModel.filterState.collectAsState()
+    val filteredDeliveries by viewModel.filteredDeliveries.collectAsState()
+
     var searchQuery by remember { mutableStateOf("") }
-
+    var filtersExpanded by remember { mutableStateOf(false) }
     
-
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val isTablet = configuration.screenWidthDp > 600
+    
+    // Helper function to calculate active filters count
+    fun calculateActiveFiltersCount(filterState: FilterState): Int {
+        var count = 0
+        if (filterState.selectedStatuses.isNotEmpty()) count++
+        if (filterState.selectedTypes.isNotEmpty()) count++
+        if (filterState.customerQuery.isNotBlank()) count++
+        if (filterState.sortBy != com.example.delivery.viewmodel.SortOption.SEQUENCE) count++
+        return count
+    }
 
 
 
-    // Fonction pour ouvrir TomTom avec tous les points de livraison du jour
+    // Fonction pour ouvrir TomTom avec tous les points de livraison du jour - AVEC DISTANCE UNIFIÉE
     fun openTomTomMapsWithAllDeliveries(deliveries: List<DeliveryItem>) {
         val geocodingService = com.example.delivery.services.TomTomGeocodingService()
         
-        println("🗺️ Geocoding ${deliveries.size} deliveries for map view")
-        
-        // Utiliser le geocoding pour toutes les livraisons
-        kotlinx.coroutines.GlobalScope.launch {
+        println("🗺️ Geocoding ${deliveries.size} deliveries for map view AVEC DISTANCE UNIFIÉE")
+        scope.launch {
+            // Limiter le nombre de points pour éviter une URL TomTom invalide/trop longue
+            val deliveriesForMap = if (deliveries.size > 20) deliveries.take(20) else deliveries
+            if (deliveries.size > 20) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Trop de livraisons (${deliveries.size}). Affichage des 20 premières sur la carte.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+
+            // 🎯 CALCULER LES DISTANCES UNIFIÉES POUR TOUTES LES LIVRAISONS
             val geocodedDeliveries = mutableListOf<Pair<Double, Double>>()
-            
-            for (delivery in deliveries) {
-                val result = geocodingService.geocodeAddress(
-                    address = delivery.deliveryAddress,
-                    city = delivery.deliveryCity,
-                    postalCode = delivery.deliveryZipCode,
-                    country = delivery.deliveryCountry ?: "France"
-                )
-                
-                if (result != null) {
-                    geocodedDeliveries.add(Pair(result.latitude, result.longitude))
-                    println("✅ Geocoded: ${delivery.deliveryAddress} -> ${result.latitude}, ${result.longitude}")
-                } else {
-                    println("❌ Failed to geocode: ${delivery.deliveryAddress}")
+            var totalUnifiedDistance = 0.0
+            var calculatedDistances = 0
+
+            withContext(Dispatchers.IO) {
+                for (delivery in deliveriesForMap) {
+                    // 📍 Calculer la distance unifiée pour chaque livraison
+                    val unifiedDistance = com.example.delivery.services.DistanceManager.calculateDeliveryDistance(
+                        originAddress = delivery.originAddress,
+                        originCity = delivery.originCity,
+                        originPostalCode = delivery.originPostalCode,
+                        deliveryAddress = delivery.deliveryAddress,
+                        deliveryCity = delivery.deliveryCity,
+                        deliveryZipCode = delivery.deliveryZipCode
+                    )
+
+                    if (unifiedDistance != null) {
+                        totalUnifiedDistance += unifiedDistance
+                        calculatedDistances++
+                        println("📍 Distance unifiée livraison ${delivery.shipmentNo}: ${unifiedDistance.toInt()} km")
+                    }
+
+                    // Continuer avec le géocodage normal pour la map
+                    val result = geocodingService.geocodeAddress(
+                        address = delivery.deliveryAddress,
+                        city = delivery.deliveryCity,
+                        postalCode = delivery.deliveryZipCode,
+                        country = delivery.deliveryCountry ?: "France"
+                    )
+
+                    if (result != null) {
+                        geocodedDeliveries.add(Pair(result.latitude, result.longitude))
+                        println("✅ Geocoded: ${delivery.deliveryAddress} -> ${result.latitude}, ${result.longitude}")
+                    } else {
+                        println("❌ Failed to geocode: ${delivery.deliveryAddress}")
+                    }
                 }
+            }
+            
+            // 📊 Afficher les statistiques de distance unifiée
+            if (calculatedDistances > 0) {
+                val avgDistance = totalUnifiedDistance / calculatedDistances
+                println("📊 STATISTIQUES DISTANCES UNIFIÉES:")
+                println("   Total livraisons avec distance: $calculatedDistances/${deliveriesForMap.size}")
+                println("   Distance totale: ${totalUnifiedDistance.toInt()} km")
+                println("   Distance moyenne: ${avgDistance.toInt()} km")
+                println("   Cache: ${com.example.delivery.services.DistanceManager.getCacheStats()}")
             }
             
             if (geocodedDeliveries.isEmpty()) {
@@ -276,32 +334,135 @@ fun DeliveryTrackingScreen(
             // API Key TomTom
             val tomtomApiKey = "c92wOsiK2ds07Gzq9ZJXNRyyWeQhSYse"
             
-            // Calculer le centre de la carte (moyenne des coordonnées)
-            val avgLat = geocodedDeliveries.map { it.first }.average()
-            val avgLon = geocodedDeliveries.map { it.second }.average()
-            val zoom = 10 // Zoom par défaut
+            // TomTom route planner: départ dépôt + étapes de livraison + destination finale
+            val firstDelivery = deliveriesForMap.firstOrNull()
+            val originPoint = withContext(Dispatchers.IO) {
+                if (firstDelivery?.originCity.isNullOrBlank()) {
+                    null
+                } else {
+                    // Plus fiable: géocoder la ville (centre) plutôt qu'une adresse dépôt "factice"
+                    geocodingService.geocodeAddress(
+                        address = null,
+                        city = firstDelivery?.originCity,
+                        postalCode = firstDelivery?.originPostalCode ?: "69000",
+                        country = "France"
+                    )?.let { Pair(it.latitude, it.longitude) }
+                }
+            }
+
+            val routePoints = mutableListOf<Pair<Double, Double>>()
+            if (originPoint != null) routePoints.add(originPoint)
+            routePoints.addAll(geocodedDeliveries)
+
+            // Cas fréquent: une seule livraison -> construire une route simple (origine -> destination)
+            if (geocodedDeliveries.size == 1) {
+                val dest = geocodedDeliveries.first()
+                val start = originPoint
+                if (start == null) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Origine introuvable pour tracer l'itinéraire",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
+                }
+
+                val startLat = String.format(java.util.Locale.US, "%.6f", start.first)
+                val startLon = String.format(java.util.Locale.US, "%.6f", start.second)
+                val endLat = String.format(java.util.Locale.US, "%.6f", dest.first)
+                val endLon = String.format(java.util.Locale.US, "%.6f", dest.second)
+
+                val rSimple =
+                    "(costModel:FASTEST,routingProvider:GLOBAL,sorted:(h~V${startLat}~J${startLon}~Vaddr~JE_Driver),travelMode:CAR,vehicleParameters:(axleWeight:-+,height:-+,length:-+,maxSpeed:-+,vehicleModelId:-+,weight:-+,width:-+))"
+                val tomtomUrl =
+                    "https://plan.tomtom.com/en/route/plan?key=$tomtomApiKey&p=$startLat,$startLon,11z&r=$rSimple&to=$endLat,$endLon"
+                val tomtomUri = android.net.Uri.parse(tomtomUrl)
+
+                println("🗺️ Opening TomTom (single delivery route)")
+                println("🔗 URL: $tomtomUrl")
+
+                try {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, tomtomUri)
+                    if (intent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(intent)
+                    } else {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Aucune application disponible pour ouvrir la carte",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } catch (e: Exception) {
+                    println("❌ Erreur lors de l'ouverture de TomTom: ${e.message}")
+                    android.widget.Toast.makeText(
+                        context,
+                        "Erreur lors de l'ouverture de TomTom",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+                return@launch
+            }
+
+            // Au minimum 2 points pour tracer un trajet
+            if (routePoints.size < 2) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Impossible de tracer un trajet (points insuffisants)",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+
+            val startPoint = routePoints.first()
+            val endPoint = routePoints.last()
+            // Vue globale tournée (mobile TomTom): zoom faible pour voir les points/route
+            val centerLat = routePoints.map { it.first }.average()
+            val centerLon = routePoints.map { it.second }.average()
+            val zoom = "5.62"
+
+            // TomTom: garder la destination finale uniquement dans `to=...` (pas dans sorted)
+            val pointsForSorted = routePoints.dropLast(1)
+            val sortedWaypoints = pointsForSorted.mapIndexed { index, coord ->
+                val waypointName = when (index) {
+                    0 -> "E_Driver"
+                    else -> "E_Stop_${index + 1}"
+                }
+                val lat = String.format(java.util.Locale.US, "%.6f", coord.first)
+                val lon = String.format(java.util.Locale.US, "%.6f", coord.second)
+                "h~V${lat}~J${lon}~Vaddr~J$waypointName"
+            }.joinToString(",")
+
+            val r = "(costModel:FASTEST,routingProvider:GLOBAL,sorted:($sortedWaypoints),travelMode:CAR,vehicleParameters:(axleWeight:-+,height:-+,length:-+,maxSpeed:-+,vehicleModelId:-+,weight:-+,width:-+))"
+            val startLat = String.format(java.util.Locale.US, "%.6f", startPoint.first)
+            val startLon = String.format(java.util.Locale.US, "%.6f", startPoint.second)
+            val endLat = String.format(java.util.Locale.US, "%.6f", endPoint.first)
+            val endLon = String.format(java.util.Locale.US, "%.6f", endPoint.second)
+
+            // TomTom parse parfois mal le paramètre r quand il est encodé (%3A, %2C)
+            // On garde r en format brut, comme l'URL de référence qui fonctionne.
+            val centerLatStr = String.format(java.util.Locale.US, "%.6f", centerLat)
+            val centerLonStr = String.format(java.util.Locale.US, "%.6f", centerLon)
+            val tomtomUrl = "https://plan.tomtom.com/en/route/plan?key=$tomtomApiKey&p=$centerLatStr,$centerLonStr,${zoom}z&r=$r&to=$endLat,$endLon"
+            val tomtomUri = android.net.Uri.parse(tomtomUrl)
             
-            // Créer les paramètres
-            val coords = geocodedDeliveries.map { "${it.first},${it.second}" }
-            val stops = coords.joinToString(";")
-            
-            // Créer le paramètre r avec le format simplifié
-            val waypoints = geocodedDeliveries.map { "h~V${it.first}~J${it.second}~Vaddr~E_Delivery" }.joinToString(",")
-            val r = "(costModel:FASTEST,routingProvider:GLOBAL,sorted:($waypoints),travelMode:CAR)"
-            
-            // URL complète avec format correct
-            val tomtomUrl = "https://plan.tomtom.com/en/route/plan?key=$tomtomApiKey&mode=car&p=$avgLat,$avgLon,${zoom}z&r=$r"
-            
-            println("🗺️ Opening TomTom with ${geocodedDeliveries.size} geocoded points")
+            println("🗺️ Opening TomTom with ${routePoints.size} route points (origin + deliveries)")
             println("🔗 URL: $tomtomUrl")
             
             // Ouvrir dans le navigateur
             try {
                 val intent = android.content.Intent(
                     android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse(tomtomUrl)
+                    tomtomUri
                 )
-                context.startActivity(intent)
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                } else {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Aucune application disponible pour ouvrir la carte",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
             } catch (e: Exception) {
                 println("❌ Erreur lors de l'ouverture de TomTom: ${e.message}")
                 android.widget.Toast.makeText(
@@ -320,10 +481,6 @@ fun DeliveryTrackingScreen(
 
 
     val snackbarHostState = remember { SnackbarHostState() }
-
-
-
-    val scope = rememberCoroutineScope()
 
 
 
@@ -655,48 +812,6 @@ fun DeliveryTrackingScreen(
 
 
 
-        // Filter deliveries based on search query
-
-        val filteredDeliveries = when (val state = tripState) {
-
-            is TripWithDeliveriesState.Success -> {
-
-                if (state.data.trip == null) {
-
-                    emptyList()
-
-                } else {
-
-                    if (searchQuery.isBlank()) {
-
-                        state.data.deliveries
-
-                    } else {
-
-                        val query = searchQuery.lowercase()
-
-                        state.data.deliveries.filter { delivery ->
-
-                            delivery.shipmentNo?.lowercase()?.contains(query) == true ||
-
-                            delivery.clientName?.lowercase()?.contains(query) == true ||
-
-                            delivery.deliveryAddress?.lowercase()?.contains(query) == true
-
-                        }
-
-                    }
-
-                }
-
-            }
-
-            else -> emptyList()
-
-        }
-
-
-
         LazyColumn(
 
             modifier = Modifier
@@ -714,76 +829,90 @@ fun DeliveryTrackingScreen(
             // Date Filter Row
 
             item {
-
                 DateFilterRow(
-
                     selectedDate = selectedDate,
-
                     shipmentDates = shipmentDates,
-
                     onDateSelected = { newDate ->
-
                         viewModel.setSelectedDate(newDate)
-
                     },
-
                     onPreviousDay = { viewModel.goToPreviousDay(driverId) },
-
                     onNextDay = { viewModel.goToNextDay(driverId) },
-
                     onTodayClick = { viewModel.goToToday(driverId) }
-
                 )
-
             }
 
-
-
-            // Search Bar
-
+            // Filter Section Card with responsive design
             item {
-
-                OutlinedTextField(
-
-                    value = searchQuery,
-
-                    onValueChange = { searchQuery = it },
-
-                    placeholder = { Text("Rechercher une livraison...") },
-
-                    leadingIcon = {
-
-                        Icon(Icons.Default.Search, contentDescription = "Recherche")
-
-                    },
-
-                    modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-
-                    singleLine = true,
-
-                    colors = OutlinedTextFieldDefaults.colors(
-
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-
-                        focusedBorderColor = MaterialTheme.colorScheme.primary
-
-                    ),
-
-                    shape = RoundedCornerShape(12.dp)
-
-                )
-
+                
+                if (filteredDeliveries.isEmpty() && filterState.selectedStatuses.isEmpty() && 
+                    filterState.selectedTypes.isEmpty() && filterState.customerQuery.isBlank()) {
+                    // Show empty filter state
+                    com.example.delivery.components.EmptyFilterState(
+                        onClearFilters = { viewModel.clearFilters() }
+                    )
+                } else {
+                    // Show filter card
+                    FilterSectionCard(
+                        isExpanded = filtersExpanded,
+                        onExpandedChange = { filtersExpanded = it },
+                        selectedStatuses = filterState.selectedStatuses,
+                        onStatusFilterChange = { viewModel.updateStatusFilter(it) },
+                        selectedTypes = filterState.selectedTypes,
+                        onTypeFilterChange = { viewModel.updateTypeFilter(it) },
+                        customerQuery = filterState.customerQuery,
+                        onCustomerQueryChange = { viewModel.updateCustomerQuery(it) },
+                        sortBy = filterState.sortBy,
+                        onSortByChange = { viewModel.updateSortOption(it) },
+                        sortOrder = filterState.sortOrder,
+                        onSortOrderChange = { viewModel.updateSortOrder(it) },
+                        activeFiltersCount = calculateActiveFiltersCount(filterState),
+                        onClearFilters = { viewModel.clearFilters() }
+                    )
+                }
             }
 
-
+            // Search Bar with responsive design
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Rechercher une livraison...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search"
+                        )
+                    },
+                    trailingIcon = if (searchQuery.isNotBlank()) {
+                        {
+                            IconButton(
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else null,
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = if (isTablet) 24.dp else 16.dp,
+                            vertical = 8.dp
+                        ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
 
             // Content based on state
 

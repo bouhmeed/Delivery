@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
+import com.example.delivery.components.VehicleMaintenanceSection
 import com.example.delivery.navigation.Screen
 import com.example.delivery.auth.AuthManager
 import com.example.delivery.models.UserResponse
@@ -32,8 +33,10 @@ import com.example.delivery.models.DriverProfile
 import com.example.delivery.models.DriverStatsSummary
 import com.example.delivery.models.VehicleInfo
 import com.example.delivery.models.DepotInfo
+import com.example.delivery.models.VehicleMaintenance
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.ProfileApiService
+import com.example.delivery.repository.VehicleRepository
 import com.example.delivery.ui.theme.FineWhiteDeliveryTheme
 import com.example.delivery.ui.theme.FineWhiteThemeExtensions
 import android.widget.Toast
@@ -54,6 +57,7 @@ fun ProfileScreen(navController: NavController) {
     // États pour le profil
     var profileResponse by remember { mutableStateOf<ProfileResponse?>(null) }
     var driverStats by remember { mutableStateOf<DriverStatsSummary?>(null) }
+    var vehicleMaintenance by remember { mutableStateOf<List<VehicleMaintenance>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isEditing by remember { mutableStateOf(false) }
@@ -127,6 +131,34 @@ fun ProfileScreen(navController: NavController) {
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
+        // Charger les données de maintenance du véhicule en utilisant driverId comme HomeScreen
+        LaunchedEffect(userInfo) {
+            userInfo?.driverId?.let { driverId ->
+                println("🔧 ProfileScreen: Loading vehicle for driver ID: $driverId")
+                val vehicleRepository = VehicleRepository()
+                vehicleRepository.getVehicleByDriverId(driverId)
+                    .onSuccess { vehicle ->
+                        println("🔧 ProfileScreen: Vehicle loaded: ${vehicle?.id}")
+                        vehicle?.id?.let { vehicleId ->
+                            println("🔧 ProfileScreen: Loading maintenance for vehicle ID: $vehicleId")
+                            vehicleRepository.getVehicleMaintenance(vehicleId.toString())
+                                .onSuccess { maintenance ->
+                                    println("🔧 ProfileScreen: Maintenance loaded successfully: ${maintenance.size} items")
+                                    vehicleMaintenance = maintenance
+                                }
+                                .onFailure { error ->
+                                    println("🔧 ProfileScreen: Error loading maintenance: ${error.message}")
+                                }
+                        } ?: run {
+                            println("🔧 ProfileScreen: No vehicle ID found")
+                        }
+                    }
+                    .onFailure { error ->
+                        println("🔧 ProfileScreen: Error loading vehicle: ${error.message}")
+                    }
+            }
+        }
+        
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -195,6 +227,7 @@ fun ProfileScreen(navController: NavController) {
                 }
             }
             
+                        
             // Depot Information Card
             profileResponse?.depot?.let { depot ->
                 item {

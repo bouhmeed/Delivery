@@ -46,6 +46,14 @@ class DeliveryTrackingViewModel : ViewModel() {
     private val _shipmentDates = MutableStateFlow<List<String>>(emptyList())
     val shipmentDates: StateFlow<List<String>> = _shipmentDates.asStateFlow()
     
+    // Filter state
+    private val _filterState = MutableStateFlow(FilterState())
+    val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
+    
+    // Filtered deliveries
+    private val _filteredDeliveries = MutableStateFlow<List<DeliveryItem>>(emptyList())
+    val filteredDeliveries: StateFlow<List<DeliveryItem>> = _filteredDeliveries.asStateFlow()
+    
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     
     /**
@@ -75,6 +83,7 @@ class DeliveryTrackingViewModel : ViewModel() {
                     }
                     is Result.Success -> {
                         _tripWithDeliveriesState.value = TripWithDeliveriesState.Success(result.data)
+                        applyFilters(result.data.deliveries)
                     }
                     is Result.Error -> {
                         _tripWithDeliveriesState.value = TripWithDeliveriesState.Error(result.message)
@@ -326,6 +335,135 @@ class DeliveryTrackingViewModel : ViewModel() {
             }
         }
     }
+    
+    /**
+     * Update filter state
+     */
+    fun updateFilterState(newState: FilterState) {
+        _filterState.value = newState
+        // Re-apply filters with new state
+        tripWithDeliveriesState.value.let { state ->
+            if (state is TripWithDeliveriesState.Success) {
+                applyFilters(state.data.deliveries)
+            }
+        }
+    }
+    
+    /**
+     * Update selected statuses filter
+     */
+    fun updateStatusFilter(statuses: Set<String>) {
+        _filterState.value = _filterState.value.copy(selectedStatuses = statuses)
+        reapplyFilters()
+    }
+    
+    /**
+     * Update selected types filter
+     */
+    fun updateTypeFilter(types: Set<String>) {
+        _filterState.value = _filterState.value.copy(selectedTypes = types)
+        reapplyFilters()
+    }
+    
+    /**
+     * Update customer search query
+     */
+    fun updateCustomerQuery(query: String) {
+        _filterState.value = _filterState.value.copy(customerQuery = query)
+        reapplyFilters()
+    }
+    
+    /**
+     * Update sort option
+     */
+    fun updateSortOption(sortOption: SortOption) {
+        _filterState.value = _filterState.value.copy(sortBy = sortOption)
+        reapplyFilters()
+    }
+    
+    /**
+     * Update sort order
+     */
+    fun updateSortOrder(sortOrder: SortOrder) {
+        _filterState.value = _filterState.value.copy(sortOrder = sortOrder)
+        reapplyFilters()
+    }
+    
+    /**
+     * Clear all filters
+     */
+    fun clearFilters() {
+        _filterState.value = FilterState()
+        reapplyFilters()
+    }
+    
+    /**
+     * Reapply current filters to current deliveries
+     */
+    private fun reapplyFilters() {
+        tripWithDeliveriesState.value.let { state ->
+            if (state is TripWithDeliveriesState.Success) {
+                applyFilters(state.data.deliveries)
+            }
+        }
+    }
+    
+    /**
+     * Apply filters and sorting to deliveries list
+     */
+    private fun applyFilters(deliveries: List<DeliveryItem>) {
+        val filtered = deliveries.filter { delivery ->
+            // Status filter
+            val statusMatch = _filterState.value.selectedStatuses.isEmpty() || 
+                delivery.status in _filterState.value.selectedStatuses
+            
+            // Type filter
+            val typeMatch = _filterState.value.selectedTypes.isEmpty() || 
+                (delivery.type != null && delivery.type in _filterState.value.selectedTypes)
+            
+            // Customer search filter
+            val customerMatch = _filterState.value.customerQuery.isBlank() || 
+                (delivery.clientName?.contains(_filterState.value.customerQuery, ignoreCase = true) == true)
+            
+            statusMatch && typeMatch && customerMatch
+        }.sortedWith(compareBy<DeliveryItem> { delivery ->
+            when (_filterState.value.sortBy) {
+                SortOption.DISTANCE -> delivery.distanceKm ?: Double.MAX_VALUE
+                SortOption.QUANTITY -> delivery.quantity.toDouble()
+                SortOption.DURATION -> (delivery.estimatedDuration ?: 0).toDouble()
+                SortOption.SEQUENCE -> delivery.sequence.toDouble()
+            }
+        }.let { comparator ->
+            if (_filterState.value.sortOrder == SortOrder.DESC) comparator.reversed() else comparator
+        })
+        
+        _filteredDeliveries.value = filtered
+    }
+}
+
+/**
+ * Filter state data class
+ */
+data class FilterState(
+    val selectedStatuses: Set<String> = emptySet(),
+    val selectedTypes: Set<String> = emptySet(),
+    val customerQuery: String = "",
+    val sortBy: SortOption = SortOption.SEQUENCE,
+    val sortOrder: SortOrder = SortOrder.ASC
+)
+
+/**
+ * Sort options enum
+ */
+enum class SortOption {
+    SEQUENCE, DISTANCE, QUANTITY, DURATION
+}
+
+/**
+ * Sort order enum
+ */
+enum class SortOrder {
+    ASC, DESC
 }
 
 /**

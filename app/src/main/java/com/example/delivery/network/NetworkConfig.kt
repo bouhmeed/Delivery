@@ -3,7 +3,9 @@ package com.example.delivery.network
 object NetworkConfig {
     // Configuration URLs - changez selon votre environnement
     val BASE_URLS = listOf(
-        "http://192.168.2.102:3000/",  // IP WiFi actuelle (PC: 192.168.2.102)
+        "http://192.168.2.138:3000/",  // IP WiFi actuelle (PC: 192.168.2.138)
+        "http://192.168.2.121:3000/",  // Ancienne IP (backup)
+        "http://192.168.2.102:3000/",  // Ancienne IP (backup)
         "http://192.168.2.88:3000/",   // Ancienne IP (backup)
         "http://192.168.2.67:3000/",   // Ancienne IP (backup)
         "http://192.168.2.24:3000/",   // Ancienne IP (backup)
@@ -14,7 +16,7 @@ object NetworkConfig {
     )
 
     // URL actuelle (changez l'index pour tester différentes configurations)
-    private var currentUrlIndex = 0  // Utilise l'IP WiFi (192.168.2.102:3000)
+    private var currentUrlIndex = 0  // Utilise l'IP WiFi (192.168.2.138:3000)
     
     fun getCurrentBaseUrl(): String {
         return BASE_URLS[currentUrlIndex]

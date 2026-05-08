@@ -1,5 +1,4 @@
 # Database Documentation
-
 This document contains the structure and documentation for the PostgreSQL database tables in the Delivery application.
 ---
 ## Table: Client
