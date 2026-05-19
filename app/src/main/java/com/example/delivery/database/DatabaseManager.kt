@@ -1,4 +1,6 @@
-package com.example.delivery.database
+﻿package com.example.delivery.database
+
+import com.example.delivery.repository.Result
 
 import android.util.Log
 import okhttp3.MediaType.Companion.toMediaType

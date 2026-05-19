@@ -1,4 +1,4 @@
-package com.example.delivery.components
+﻿package com.example.delivery.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.delivery.viewmodel.DeliveryStats
+import com.example.delivery.viewmodel.delivery.DeliveryStats
 
 @Composable
 fun DeliveryStatsCard(
@@ -106,7 +106,7 @@ fun DeliveryStatsCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 LinearProgressIndicator(
-                    progress = animatedProgress,
+                    progress = { animatedProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp),

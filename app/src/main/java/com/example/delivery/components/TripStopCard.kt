@@ -3,6 +3,7 @@ package com.example.delivery.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,8 +14,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.delivery.models.TripStopDetail
-import com.example.delivery.models.ShipmentDetail
+import com.example.delivery.models.driver.TripStopDetail
+import com.example.delivery.models.driver.ShipmentDetail
 
 @Composable
 fun TripStopCard(
@@ -123,13 +124,16 @@ fun TripStopCard(
             }
             
             // Heures prévues
-            if (stop.estimatedArrival != null || stop.estimatedDeparture != null) {
+            val hasArrival = !stop.estimatedArrival.isNullOrEmpty() && stop.estimatedArrival.length >= 16
+            val hasDeparture = !stop.estimatedDeparture.isNullOrEmpty() && stop.estimatedDeparture.length >= 16
+            if (hasArrival || hasDeparture) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    stop.estimatedArrival?.let { arrival ->
+                    if (hasArrival) {
+                        val arrival = stop.estimatedArrival!!
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -148,12 +152,13 @@ fun TripStopCard(
                         }
                     }
                     
-                    stop.estimatedDeparture?.let { departure ->
+                    if (hasDeparture) {
+                        val departure = stop.estimatedDeparture!!
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.ExitToApp,
+                                Icons.AutoMirrored.Filled.ExitToApp,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)

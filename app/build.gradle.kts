@@ -185,20 +185,9 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
-
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-
     debugImplementation(libs.androidx.compose.ui.tooling)
-
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-
-
-
     // Auth0 SDK
-
     implementation("com.auth0.android:auth0:2.+")
-
-    // TomTom SDK dependencies removed - using web navigation instead
-    // See TOMTOM_WEB_NAVIGATION_IMPLEMENTATION.md for details
-
 }

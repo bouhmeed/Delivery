@@ -1,7 +1,13 @@
-package com.example.delivery.repository
+﻿package com.example.delivery.repository
+
+import com.example.delivery.repository.Result
 
 import com.example.delivery.database.DatabaseManager
 import com.example.delivery.models.*
+import com.example.delivery.models.delivery.*
+import com.example.delivery.models.driver.*
+import com.example.delivery.models.user.*
+import com.example.delivery.models.vehicle.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -236,7 +242,7 @@ class DirectHistoryRepository {
 
     private fun getNullableString(json: JSONObject, key: String): String? {
         if (json.isNull(key)) return null
-        val value = json.optString(key, null)
+        val value = json.optString(key, null as String?)
         return if (value == "null") null else value
     }
 

@@ -1,4 +1,6 @@
-package com.example.delivery.auth
+﻿package com.example.delivery.auth
+
+import com.example.delivery.repository.Result
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -51,9 +53,9 @@ class AuthManager(private val context: Context) {
                 val json = JSONObject(payload)
                 
                 UserInfo(
-                    email = json.optString("email", null),
-                    name = json.optString("name", null),
-                    nickname = json.optString("nickname", null)
+                    email = json.optString("email", null as String?),
+                    name = json.optString("name", null as String?),
+                    nickname = json.optString("nickname", null as String?)
                 )
             } else {
                 UserInfo(

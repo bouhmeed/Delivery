@@ -1,6 +1,6 @@
 package com.example.delivery.models
 
-// Trip is already defined in Trip.kt, so we just use it here
+import com.example.delivery.models.driver.Trip
 
 data class TripShipmentLink(
     val id: Int,

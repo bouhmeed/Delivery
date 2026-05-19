@@ -1,4 +1,4 @@
-package com.example.delivery.components
+﻿package com.example.delivery.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -29,10 +29,10 @@ fun FilterSectionCard(
     onTypeFilterChange: (Set<String>) -> Unit,
     customerQuery: String,
     onCustomerQueryChange: (String) -> Unit,
-    sortBy: com.example.delivery.viewmodel.SortOption,
-    onSortByChange: (com.example.delivery.viewmodel.SortOption) -> Unit,
-    sortOrder: com.example.delivery.viewmodel.SortOrder,
-    onSortOrderChange: (com.example.delivery.viewmodel.SortOrder) -> Unit,
+    sortBy: com.example.delivery.viewmodel.delivery.SortOption,
+    onSortByChange: (com.example.delivery.viewmodel.delivery.SortOption) -> Unit,
+    sortOrder: com.example.delivery.viewmodel.delivery.SortOrder,
+    onSortOrderChange: (com.example.delivery.viewmodel.delivery.SortOrder) -> Unit,
     activeFiltersCount: Int,
     onClearFilters: () -> Unit,
     modifier: Modifier = Modifier
@@ -359,10 +359,10 @@ fun FilterSectionCard(
                         // Sort by
                         OutlinedTextField(
                             value = when (sortBy) {
-                                com.example.delivery.viewmodel.SortOption.SEQUENCE -> "Séquence"
-                                com.example.delivery.viewmodel.SortOption.DISTANCE -> "Distance"
-                                com.example.delivery.viewmodel.SortOption.QUANTITY -> "Quantité"
-                                com.example.delivery.viewmodel.SortOption.DURATION -> "Durée"
+                                com.example.delivery.viewmodel.delivery.SortOption.SEQUENCE -> "Séquence"
+                                com.example.delivery.viewmodel.delivery.SortOption.DISTANCE -> "Distance"
+                                com.example.delivery.viewmodel.delivery.SortOption.QUANTITY -> "Quantité"
+                                com.example.delivery.viewmodel.delivery.SortOption.DURATION -> "Durée"
                             },
                             onValueChange = { /* Read-only */ },
                             label = { Text("Trier par") },
@@ -382,23 +382,23 @@ fun FilterSectionCard(
                         
                         // Sort order
                         FilterChip(
-                            selected = sortOrder == com.example.delivery.viewmodel.SortOrder.ASC,
+                            selected = sortOrder == com.example.delivery.viewmodel.delivery.SortOrder.ASC,
                             onClick = { 
                                 onSortOrderChange(
-                                    if (sortOrder == com.example.delivery.viewmodel.SortOrder.ASC) 
-                                        com.example.delivery.viewmodel.SortOrder.DESC 
+                                    if (sortOrder == com.example.delivery.viewmodel.delivery.SortOrder.ASC) 
+                                        com.example.delivery.viewmodel.delivery.SortOrder.DESC 
                                     else 
-                                        com.example.delivery.viewmodel.SortOrder.ASC
+                                        com.example.delivery.viewmodel.delivery.SortOrder.ASC
                                 )
                             },
                             label = { 
                                 Text(
-                                    if (sortOrder == com.example.delivery.viewmodel.SortOrder.ASC) "A→Z" else "Z→A"
+                                    if (sortOrder == com.example.delivery.viewmodel.delivery.SortOrder.ASC) "A→Z" else "Z→A"
                                 ) 
                             },
                             leadingIcon = {
                                 Icon(
-                                    imageVector = if (sortOrder == com.example.delivery.viewmodel.SortOrder.ASC) 
+                                    imageVector = if (sortOrder == com.example.delivery.viewmodel.delivery.SortOrder.ASC) 
                                         Icons.Default.ArrowUpward 
                                     else 
                                         Icons.Default.ArrowDownward,

@@ -1,4 +1,4 @@
-package com.example.delivery.screens.main
+﻿package com.example.delivery.screens.main
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -33,24 +33,31 @@ import com.example.delivery.components.TodayTourCard
 import com.example.delivery.components.QuickActionsCard
 import com.example.delivery.components.DayIndicatorCard
 import com.example.delivery.components.CurrentDayCard
+import com.example.delivery.components.MaintenanceAlertCard
+import com.example.delivery.components.VehicleMaintenanceSection
 import com.example.delivery.navigation.Screen
 import com.example.delivery.data.DeliveryData
 import com.example.delivery.auth.AuthManager
-import com.example.delivery.repository.UserRepository
-import com.example.delivery.repository.DriverRepository
-import com.example.delivery.repository.VehicleRepository
-import com.example.delivery.models.UserResponse
-import com.example.delivery.models.Driver
-import com.example.delivery.models.Vehicle
-import com.example.delivery.network.ApiClient
-import com.example.delivery.viewmodel.TodayTourViewModel
-import com.example.delivery.viewmodel.TodayTourState
-import com.example.delivery.viewmodel.ShipmentSearchViewModel
+import com.example.delivery.repository.user.UserRepository
+import com.example.delivery.repository.driver.DriverRepository
+import com.example.delivery.repository.vehicle.VehicleRepository
+import com.example.delivery.repository.user.DirectUserRepository
+import com.example.delivery.repository.driver.DirectDriverRepository
+import com.example.delivery.repository.vehicle.DirectVehicleRepository
+import com.example.delivery.models.user.UserResponse
+import com.example.delivery.models.driver.Driver
+import com.example.delivery.models.vehicle.Vehicle
+import com.example.delivery.models.vehicle.VehicleMaintenance
+import com.example.delivery.models.vehicle.MaintenanceAlert
+import com.example.delivery.network.config.ApiClient
+import com.example.delivery.viewmodel.delivery.TodayTourViewModel
+import com.example.delivery.viewmodel.delivery.TodayTourState
+import com.example.delivery.viewmodel.delivery.ShipmentSearchViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.delivery.models.ShipmentSearchState
-import com.example.delivery.models.ShipmentSearchData
-import com.example.delivery.screens.ManualEntryDialog
-import com.example.delivery.screens.ShipmentDetailScreen
+import com.example.delivery.models.delivery.ShipmentSearchState
+import com.example.delivery.models.delivery.ShipmentSearchData
+import com.example.delivery.screens.components.ManualEntryDialog
+import com.example.delivery.screens.delivery.ShipmentDetailScreen
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +75,8 @@ fun HomeScreen(navController: NavController) {
     var userInfo: UserResponse? by remember { mutableStateOf(null) }
     var driverInfo: Driver? by remember { mutableStateOf(null) }
     var vehicleInfo: Vehicle? by remember { mutableStateOf(null) }
+    var maintenanceAlert: MaintenanceAlert? by remember { mutableStateOf(null) }
+    var vehicleMaintenance: List<VehicleMaintenance> by remember { mutableStateOf(emptyList()) }
     var isLoading: Boolean by remember { mutableStateOf(false) }
     
     // ViewModel pour la tournée du jour
@@ -88,29 +97,60 @@ fun HomeScreen(navController: NavController) {
         userEmail?.let { email ->
             isLoading = true
             coroutineScope.launch {
-                // Récupérer l'utilisateur
-                val userRepository = UserRepository()
+                // Récupérer l'utilisateur (Direct Neon Connection)
+                val userRepository = DirectUserRepository()
                 userRepository.getUserByEmail(email)
                     .onSuccess { user ->
                         userInfo = user
+                        println("👤 USER CAPTURED - ID: ${user.id}, Email: ${user.email}, Name: ${user.firstName} ${user.lastName}, Role: ${user.role}, DriverId: ${user.driverId}")
                         
                         // Si l'utilisateur a un driverId, récupérer les infos du chauffeur
+                        println("👤 User driverId: ${user.driverId}")
                         user.driverId?.let { driverId ->
+                            println("🚗 Attempting to fetch driver with ID: $driverId")
                             try {
                                 val driverIdInt = driverId.toInt()
-                                // Configurer le driverId pour le ViewModel de la tournée
-                                todayTourViewModel.setDriverId(driverIdInt)
                                 
-                                val driverRepository = DriverRepository()
+                                // Configurer le driverId pour les ViewModels
+                                todayTourViewModel.setDriverId(driverIdInt)
+                                shipmentSearchViewModel.setDriverId(driverIdInt)
+                                
+                                // Récupérer le chauffeur (Direct Neon Connection)
+                                val driverRepository = DirectDriverRepository()
                                 driverRepository.getDriverById(driverId)
                                     .onSuccess { driver ->
+                                        println("✅ Driver found: ${driver.name}")
                                         driverInfo = driver
                                         
-                                        // Récupérer le véhicule du chauffeur
-                                        val vehicleRepository = VehicleRepository()
+                                        // Récupérer le véhicule du chauffeur (Direct Neon Connection)
+                                        val vehicleRepository = DirectVehicleRepository()
                                         vehicleRepository.getVehicleByDriverId(driverId)
                                             .onSuccess { vehicle ->
                                                 vehicleInfo = vehicle
+                                                
+                                                // Récupérer les données de maintenance du véhicule (Direct Neon Connection)
+                                                vehicle?.id?.let { vehicleId ->
+                                                    println("🔧 HomeScreen: Loading maintenance for vehicle ID: $vehicleId")
+                                                    vehicleRepository.getVehicleMaintenance(vehicleId.toString())
+                                                        .onSuccess { maintenance ->
+                                                            println("🔧 HomeScreen: Maintenance loaded successfully: ${maintenance.size} items")
+                                                            vehicleMaintenance = maintenance
+                                                            val alert = vehicleRepository.calculateMaintenanceAlert(maintenance)
+                                                            // Set vehicle name and registration in alert
+                                                            alert?.let {
+                                                                maintenanceAlert = it.copy(
+                                                                    vehicleName = vehicle.name,
+                                                                    registration = vehicle.registration
+                                                                )
+                                                            }
+                                                            println("🔧 HomeScreen: Alert calculated: ${alert?.warningLevel}")
+                                                        }
+                                                        .onFailure { error ->
+                                                            println("🔧 HomeScreen: Error loading maintenance: ${error.message}")
+                                                        }
+                                                } ?: run {
+                                                    println("🔧 HomeScreen: No vehicle ID found")
+                                                }
                                             }
                                             .onFailure { error ->
                                                 println("Erreur lors de la récupération du véhicule: ${error.message}")
@@ -163,6 +203,16 @@ fun HomeScreen(navController: NavController) {
                     driverInfo = driverInfo,
                     isLoading = isLoading
                 )
+            }
+            
+            // Maintenance Alert Card
+            item {
+                val alert = maintenanceAlert
+                println("🔧 HomeScreen: About to display MaintenanceAlertCard. Alert is null: ${alert == null}")
+                if (alert != null) {
+                    println("🔧 HomeScreen: Alert details - Type: ${alert.type}, Days: ${alert.daysRemaining}, Level: ${alert.warningLevel}")
+                }
+                MaintenanceAlertCard(alert = alert)
             }
             
             // Tournée du jour
@@ -281,6 +331,13 @@ fun HomeScreen(navController: NavController) {
                 }
             }
             
+            // Vehicle Maintenance Section
+            if (vehicleMaintenance.isNotEmpty()) {
+                item {
+                    VehicleMaintenanceSection(maintenance = vehicleMaintenance)
+                }
+            }
+            
             // Actions Rapides - DERNIÈRE CARTE
             item {
                 QuickActionsCard(
@@ -292,6 +349,7 @@ fun HomeScreen(navController: NavController) {
         }
     }
     
+        
     // Gérer les résultats de recherche
     LaunchedEffect(shipmentSearchState) {
         val currentState = shipmentSearchState

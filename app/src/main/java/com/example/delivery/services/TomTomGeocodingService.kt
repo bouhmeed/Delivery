@@ -1,4 +1,4 @@
-package com.example.delivery.services
+﻿package com.example.delivery.services
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -111,7 +111,7 @@ class TomTomGeocodingService {
                 val position = firstResult.getJSONObject("position")
                 val lat = position.getDouble("lat")
                 val lon = position.getDouble("lon")
-                val formattedAddress = firstResult.optString("address", null)
+                val formattedAddress = firstResult.optString("address", null as String?)
                 
                 println("✅ Géocodage réussi: $lat, $lon")
                 println("📍 Adresse trouvée: ${formattedAddress ?: "N/A"}")

@@ -1,4 +1,4 @@
-package com.example.delivery.components
+﻿package com.example.delivery.components
 
 import android.content.Context
 import android.content.Intent
@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.example.delivery.models.DeliveryItem
+import com.example.delivery.models.delivery.DeliveryItem
 import com.example.delivery.services.TomTomGeocodingService
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch

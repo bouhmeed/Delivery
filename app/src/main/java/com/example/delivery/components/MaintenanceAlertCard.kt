@@ -1,4 +1,4 @@
-package com.example.delivery.components
+﻿package com.example.delivery.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,8 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.delivery.models.MaintenanceAlert
-import com.example.delivery.models.WarningLevel
+import com.example.delivery.models.vehicle.MaintenanceAlert
+import com.example.delivery.models.vehicle.WarningLevel
 import com.example.delivery.ui.DesignSystem
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1,4 +1,4 @@
-package com.example.delivery.components
+﻿package com.example.delivery.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -7,7 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,8 +21,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.delivery.models.TourInfo
-import com.example.delivery.models.TourStatistics
+import com.example.delivery.models.delivery.TourInfo
+import com.example.delivery.models.delivery.TourStatistics
 
 @Composable
 fun TodayTourCard(

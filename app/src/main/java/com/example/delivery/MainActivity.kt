@@ -1,4 +1,4 @@
-package com.example.delivery
+﻿package com.example.delivery
 
 import android.os.Bundle
 import android.util.Log
@@ -14,8 +14,23 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.delivery.navigation.Screen
-import com.example.delivery.screens.*
-import com.example.delivery.screens.main.ProfileScreen
+import com.example.delivery.screens.main.HomeScreen
+import com.example.delivery.screens.main.LoginScreen
+import com.example.delivery.screens.delivery.TourneeScreen
+import com.example.delivery.screens.delivery.DeliveryTrackingScreenWithDetails
+import com.example.delivery.screens.delivery.PODScreen
+import com.example.delivery.screens.user.ProfileScreen
+import com.example.delivery.screens.history.NewHistoryScreen
+import com.example.delivery.screens.user.SettingsScreen
+import com.example.delivery.screens.user.ThemeSettingsScreen
+import com.example.delivery.screens.delivery.OrderDetailsScreen
+import com.example.delivery.screens.trip.TripTestScreen
+import com.example.delivery.screens.test.DeliveryTrackingTestScreen
+import com.example.delivery.screens.test.DateFilterTestScreen
+import com.example.delivery.screens.delivery.DeliveryValidationScreen
+import com.example.delivery.screens.delivery.ReturnsScreen
+import com.example.delivery.screens.trip.TripDetailScreen
+import com.example.delivery.screens.delivery.NewShipmentDetailScreen
 import com.example.delivery.ui.theme.DeliveryTheme
 import kotlinx.coroutines.launch
 import com.example.delivery.database.DatabaseManager
@@ -190,7 +205,7 @@ class MainActivity : ComponentActivity() {
                             val shipmentId = backStackEntry.arguments?.getInt("shipmentId")
                             
                             // Mock delivery item for mapping screen if needed
-                            val mockDelivery = com.example.delivery.models.DeliveryItem(
+                            val mockDelivery = com.example.delivery.models.delivery.DeliveryItem(
                                 sequence = 1,
                                 shipmentId = shipmentId ?: 0,
                                 status = "TO_PLAN",

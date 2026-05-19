@@ -1,4 +1,4 @@
-package com.example.delivery.components
+﻿package com.example.delivery.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -22,8 +22,8 @@ import java.util.*
 
 @Composable
 fun CurrentDayCard(
-    userInfo: com.example.delivery.models.UserResponse?,
-    driverInfo: com.example.delivery.models.Driver?,
+    userInfo: com.example.delivery.models.user.UserResponse?,
+    driverInfo: com.example.delivery.models.driver.Driver?,
     isLoading: Boolean
 ) {
     val today = LocalDate.now()

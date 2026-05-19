@@ -43,7 +43,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.Priority
-import com.example.delivery.models.DeliveryItem
+import com.example.delivery.models.delivery.DeliveryItem
 import com.example.delivery.ui.DesignSystem
 import com.example.delivery.services.TomTomGeocodingService
 import kotlinx.coroutines.delay

@@ -1,4 +1,4 @@
-package com.example.delivery.components
+﻿package com.example.delivery.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,11 +7,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,7 +71,7 @@ fun CustomCalendar(
                             .background(Color(0xFFF5F5F5))
                     ) {
                         Icon(
-                            Icons.Default.KeyboardArrowLeft,
+                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                             contentDescription = "Mois précédent",
                             tint = Color(0xFF666666)
                         )
@@ -94,7 +91,7 @@ fun CustomCalendar(
                             .background(Color(0xFFF5F5F5))
                     ) {
                         Icon(
-                            Icons.Default.KeyboardArrowRight,
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = "Mois suivant",
                             tint = Color(0xFF666666)
                         )
@@ -312,7 +309,7 @@ fun DateFilterRow(
                         .background(Color(0xFFF5F5F5))
                 ) {
                     Icon(
-                        Icons.Default.KeyboardArrowLeft,
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                         contentDescription = "Jour précédent",
                         tint = Color(0xFF666666)
                     )
@@ -367,7 +364,7 @@ fun DateFilterRow(
                         .background(Color(0xFFF5F5F5))
                 ) {
                     Icon(
-                        Icons.Default.KeyboardArrowRight,
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = "Jour suivant",
                         tint = Color(0xFF666666)
                     )
