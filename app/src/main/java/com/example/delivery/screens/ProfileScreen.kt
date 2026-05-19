@@ -34,17 +34,14 @@ import com.example.delivery.models.DriverStatsSummary
 import com.example.delivery.models.VehicleInfo
 import com.example.delivery.models.DepotInfo
 import com.example.delivery.models.VehicleMaintenance
-import com.example.delivery.network.ApiClient
-import com.example.delivery.network.ProfileApiService
-import com.example.delivery.repository.VehicleRepository
+import com.example.delivery.repository.DirectProfileRepository
+import com.example.delivery.repository.DirectUserRepository
+import com.example.delivery.repository.DirectVehicleRepository
 import com.example.delivery.ui.theme.FineWhiteDeliveryTheme
 import com.example.delivery.ui.theme.FineWhiteThemeExtensions
 import android.widget.Toast
 import kotlinx.coroutines.launch
-import retrofit2.Response
-import java.net.SocketTimeoutException
-import java.net.ConnectException
-import java.net.UnknownHostException
+import kotlin.Result
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,8 +59,10 @@ fun ProfileScreen(navController: NavController) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isEditing by remember { mutableStateOf(false) }
     
-    // Services API
-    val profileApi = remember { ApiClient.instance.create(ProfileApiService::class.java) }
+    // Repositories directes Neon SQL
+    val directUserRepo = remember { DirectUserRepository() }
+    val directProfileRepo = remember { DirectProfileRepository() }
+    val directVehicleRepo = remember { DirectVehicleRepository() }
     
     // Récupérer les informations de l'utilisateur pour obtenir le driverId
     var userInfo by remember { mutableStateOf<UserResponse?>(null) }
@@ -74,25 +73,23 @@ fun ProfileScreen(navController: NavController) {
             errorMessage = null
             coroutineScope.launch {
                 try {
-                    // Récupérer les infos utilisateur avec l'API existante
-                    val userApi = ApiClient.instance.create(com.example.delivery.network.UserApiService::class.java)
-                    val userResponse = userApi.getUserByEmail(email)
-                    
-                    if (userResponse.isSuccessful) {
-                        userInfo = userResponse.body()
+                    // Récupérer les infos utilisateur avec DirectUserRepository
+                    val userResult = directUserRepo.getUserByEmail(email)
+                    if (userResult.isSuccess) {
+                        userInfo = userResult.getOrNull()
                         userInfo?.driverId?.let { driverId: String ->
                             // Charger le profil complet (contient déjà véhicule et dépôt)
-                            loadDriverProfile(profileApi, driverId, { response: ProfileResponse ->
+                            loadDriverProfile(directProfileRepo, driverId, { response: ProfileResponse ->
                                 profileResponse = response
                             }, { error: String -> errorMessage = error })
                             
                             // Charger les statistiques
-                            loadDriverStats(profileApi, driverId, { stats: DriverStatsSummary ->
+                            loadDriverStats(directProfileRepo, driverId, { stats: DriverStatsSummary ->
                                 driverStats = stats
                             }, { error: String -> errorMessage = error })
                         }
                     } else {
-                        errorMessage = "Erreur utilisateur: ${userResponse.code()}"
+                        errorMessage = "Erreur utilisateur: ${userResult.exceptionOrNull()?.message}"
                     }
                 } catch (e: Exception) {
                     errorMessage = "Erreur lors du chargement: ${e.message}"
@@ -131,17 +128,16 @@ fun ProfileScreen(navController: NavController) {
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
-        // Charger les données de maintenance du véhicule en utilisant driverId comme HomeScreen
+        // Charger les données de maintenance du véhicule en utilisant driverId comme HomeScreen via DirectVehicleRepository
         LaunchedEffect(userInfo) {
             userInfo?.driverId?.let { driverId ->
                 println("🔧 ProfileScreen: Loading vehicle for driver ID: $driverId")
-                val vehicleRepository = VehicleRepository()
-                vehicleRepository.getVehicleByDriverId(driverId)
+                directVehicleRepo.getVehicleByDriverId(driverId)
                     .onSuccess { vehicle ->
                         println("🔧 ProfileScreen: Vehicle loaded: ${vehicle?.id}")
                         vehicle?.id?.let { vehicleId ->
                             println("🔧 ProfileScreen: Loading maintenance for vehicle ID: $vehicleId")
-                            vehicleRepository.getVehicleMaintenance(vehicleId.toString())
+                            directVehicleRepo.getVehicleMaintenance(vehicleId)
                                 .onSuccess { maintenance ->
                                     println("🔧 ProfileScreen: Maintenance loaded successfully: ${maintenance.size} items")
                                     vehicleMaintenance = maintenance
@@ -206,7 +202,7 @@ fun ProfileScreen(navController: NavController) {
                         isEditing = isEditing,
                         onProfileUpdate = { updatedProfile: DriverProfile ->
                             coroutineScope.launch {
-                                updateDriverProfile(profileApi, response.profile.id.toString(), updatedProfile, { success: Boolean ->
+                                updateDriverProfile(directProfileRepo, response.profile.id.toString(), updatedProfile, { success: Boolean ->
                                     if (success) {
                                         Toast.makeText(context, "Profil mis à jour", Toast.LENGTH_SHORT).show()
                                         isEditing = false
@@ -1534,43 +1530,39 @@ private fun formatDate(dateString: String): String {
     }
 }
 
-// API Helper functions
+// Direct DB Helper functions
 private suspend fun loadDriverProfile(
-    api: ProfileApiService,
+    repository: DirectProfileRepository,
     driverId: String,
     onSuccess: (ProfileResponse) -> Unit,
     onError: (String) -> Unit
 ) {
     try {
-        val response = api.getDriverProfile(driverId.toInt())
-        if (response.isSuccessful) {
-            response.body()?.let { onSuccess(it) }
+        val driverIdInt = driverId.toIntOrNull() ?: 5
+        val result = repository.getDriverProfile(driverIdInt)
+        if (result.isSuccess) {
+            result.getOrNull()?.let { onSuccess(it) }
         } else {
-            onError("Erreur HTTP: ${response.code()}")
+            onError("Erreur profil: ${result.exceptionOrNull()?.message}")
         }
-    } catch (e: SocketTimeoutException) {
-        onError("Timeout: Le serveur ne répond pas")
-    } catch (e: ConnectException) {
-        onError("Connexion refusée")
-    } catch (e: UnknownHostException) {
-        onError("Hôte inconnu")
     } catch (e: Exception) {
         onError("Erreur: ${e.message}")
     }
 }
 
 private suspend fun loadDriverStats(
-    api: ProfileApiService,
+    repository: DirectProfileRepository,
     driverId: String,
     onSuccess: (DriverStatsSummary) -> Unit,
     onError: (String) -> Unit
 ) {
     try {
-        val response = api.getDriverStats(driverId.toInt())
-        if (response.isSuccessful) {
-            response.body()?.let { onSuccess(it) }
+        val driverIdInt = driverId.toIntOrNull() ?: 5
+        val result = repository.getDriverStats(driverIdInt)
+        if (result.isSuccess) {
+            result.getOrNull()?.let { onSuccess(it) }
         } else {
-            onError("Erreur HTTP: ${response.code()}")
+            onError("Erreur stats: ${result.exceptionOrNull()?.message}")
         }
     } catch (e: Exception) {
         onError("Erreur stats: ${e.message}")
@@ -1578,7 +1570,7 @@ private suspend fun loadDriverStats(
 }
 
 private suspend fun updateDriverProfile(
-    api: ProfileApiService,
+    repository: DirectProfileRepository,
     driverId: String,
     profile: DriverProfile,
     onSuccess: (Boolean) -> Unit,
@@ -1590,18 +1582,6 @@ private suspend fun updateDriverProfile(
         onSuccess(true)
     } catch (e: Exception) {
         onError("Erreur mise à jour: ${e.message}")
-    }
-}
-
-private suspend fun testDatabaseConnection(api: ProfileApiService) {
-    try {
-        // Test connection with a simple API call
-        val response = api.getDriverStats(1) // Test with driver ID 1
-        if (response.isSuccessful) {
-            // Connection successful
-        }
-    } catch (e: Exception) {
-        // Connection failed
     }
 }
 

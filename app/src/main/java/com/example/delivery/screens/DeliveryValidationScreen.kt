@@ -1,36 +1,49 @@
 package com.example.delivery.screens
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.provider.MediaStore
 import android.util.Base64
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.DeliveryValidationApiService
 import com.example.delivery.network.DeliveryValidationRequest
+import com.example.delivery.repository.DirectShipmentDetailRepository
+import com.example.delivery.repository.DirectDeliveryValidationRepository
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import android.graphics.Bitmap
@@ -53,28 +66,96 @@ fun DeliveryValidationScreen(
     var notes by remember { mutableStateOf("") }
     var clientName by remember { mutableStateOf("") }
     var isLoadingDetails by remember { mutableStateOf(false) }
+    var existingSignatureUrl by remember { mutableStateOf<String?>(null) }
+    
+    // Photo variables
+    var hasPhoto by remember { mutableStateOf(false) }
+    var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var existingImageUrl by remember { mutableStateOf<String?>(null) }
+
     // State for Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    val shipmentDetailRepository = remember { DirectShipmentDetailRepository() }
+    val directValidationRepo = remember { DirectDeliveryValidationRepository() }
     
     // Log pour vérifier le shipmentId
     println("🔍 DEBUG: shipmentId reçu = $shipmentId")
     
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Gestion des permissions caméra
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    
+    // Launcher pour demander la permission caméra
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasCameraPermission = isGranted
+    }
+    
+    // Launcher pour prendre une photo
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            result.data?.extras?.get("data")?.let { data ->
+                photoBitmap = data as? Bitmap
+                hasPhoto = true
+            }
+        }
+    }
+
+    // Fonction pour prendre une photo
+    fun takePhoto() {
+        when {
+            hasCameraPermission -> {
+                val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                cameraLauncher.launch(intent) 
+            }
+            else -> {
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
+    }
     
     // Load shipment details to get client name
     LaunchedEffect(shipmentId) {
         shipmentId?.let { id ->
             isLoadingDetails = true
             try {
-                val apiService = ApiClient.getRetrofit().create(com.example.delivery.network.ShipmentDetailApiService::class.java)
-                val response = apiService.getShipmentDetails(id)
-                if (response.isSuccessful && response.body()?.success == true) {
-                    val customerName = response.body()?.data?.shipment?.customer?.name
-                    if (customerName != null) {
-                        signerName = customerName
-                        clientName = customerName
-                        println("🔍 DEBUG: Client name loaded: $customerName")
+                shipmentDetailRepository.getShipmentDetails(id).collect { result ->
+                    if (result is com.example.delivery.repository.Result.Success) {
+                        val shipment = result.data
+                        val customerName = shipment.customer?.name
+                        if (customerName != null) {
+                            signerName = customerName
+                            clientName = customerName
+                            println("🔍 DEBUG: Client name loaded: $customerName")
+                        }
+                        
+                        val existingSignature = shipment.deliveryProof?.signatureUrl
+                        if (existingSignature != null && existingSignature.isNotEmpty()) {
+                            existingSignatureUrl = existingSignature
+                            isSigned = true
+                            println("🔍 DEBUG: Existing signature loaded: ${existingSignature.take(50)}")
+                        }
+
+                        val existingImage = shipment.deliveryProof?.imageUrl
+                        if (existingImage != null && existingImage.isNotBlank() && !existingImage.contains("/9j/4AAQSkZJRgABAQEAYABgAAD")) {
+                            existingImageUrl = existingImage
+                            photoBitmap = base64ToBitmap(existingImage)
+                            hasPhoto = true
+                            println("🔍 DEBUG: Existing photo loaded: ${existingImage.take(50)}")
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -135,32 +216,71 @@ fun DeliveryValidationScreen(
                                 RoundedCornerShape(8.dp)
                             )
                     ) {
-                        Canvas(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(Unit) {
-                                    detectDragGestures(
-                                        onDragStart = { offset ->
-                                            currentStroke = listOf(offset)
-                                            isSigned = true
-                                        },
-                                        onDrag = { change, _ ->
-                                            currentStroke = currentStroke + change.position
-                                        },
-                                        onDragEnd = {
-                                            signatureStrokes = signatureStrokes + listOf(currentStroke)
-                                            currentStroke = emptyList()
+                        if (existingSignatureUrl != null) {
+                            val bitmap = remember(existingSignatureUrl) {
+                                base64ToBitmap(existingSignatureUrl!!)
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Signature existante",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Text(
+                                    text = "Signature existante (erreur de rendu)",
+                                    color = Color.Gray,
+                                    modifier = Modifier.align(Alignment.Center)
+                                )
+                            }
+                        } else {
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectDragGestures(
+                                            onDragStart = { offset ->
+                                                currentStroke = listOf(offset)
+                                                isSigned = true
+                                            },
+                                            onDrag = { change, _ ->
+                                                currentStroke = currentStroke + change.position
+                                            },
+                                            onDragEnd = {
+                                                signatureStrokes = signatureStrokes + listOf(currentStroke)
+                                                currentStroke = emptyList()
+                                            }
+                                        )
+                                    }
+                            ) {
+                                // Draw all completed strokes
+                                signatureStrokes.forEach { stroke ->
+                                    if (stroke.size > 1) {
+                                        val path = Path().apply {
+                                            moveTo(stroke[0].x, stroke[0].y)
+                                            for (i in 1 until stroke.size) {
+                                                lineTo(stroke[i].x, stroke[i].y)
+                                            }
                                         }
-                                    )
+                                        drawPath(
+                                            path = path,
+                                            color = Color.Black,
+                                            style = Stroke(
+                                                width = 3f,
+                                                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                                join = androidx.compose.ui.graphics.StrokeJoin.Round
+                                            )
+                                        )
+                                    }
                                 }
-                        ) {
-                            // Draw all completed strokes
-                            signatureStrokes.forEach { stroke ->
-                                if (stroke.size > 1) {
+                                
+                                // Draw current stroke
+                                if (currentStroke.size > 1) {
                                     val path = Path().apply {
-                                        moveTo(stroke[0].x, stroke[0].y)
-                                        for (i in 1 until stroke.size) {
-                                            lineTo(stroke[i].x, stroke[i].y)
+                                        moveTo(currentStroke[0].x, currentStroke[0].y)
+                                        for (i in 1 until currentStroke.size) {
+                                            lineTo(currentStroke[i].x, currentStroke[i].y)
                                         }
                                     }
                                     drawPath(
@@ -175,34 +295,15 @@ fun DeliveryValidationScreen(
                                 }
                             }
                             
-                            // Draw current stroke
-                            if (currentStroke.size > 1) {
-                                val path = Path().apply {
-                                    moveTo(currentStroke[0].x, currentStroke[0].y)
-                                    for (i in 1 until currentStroke.size) {
-                                        lineTo(currentStroke[i].x, currentStroke[i].y)
-                                    }
-                                }
-                                drawPath(
-                                    path = path,
-                                    color = Color.Black,
-                                    style = Stroke(
-                                        width = 3f,
-                                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                                        join = androidx.compose.ui.graphics.StrokeJoin.Round
-                                    )
+                            // Placeholder text when empty
+                            if (!isSigned) {
+                                Text(
+                                    text = "Signer ici",
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.align(Alignment.Center)
                                 )
                             }
-                        }
-                        
-                        // Placeholder text when empty
-                        if (!isSigned) {
-                            Text(
-                                text = "Signer ici",
-                                color = Color.Gray,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.align(Alignment.Center)
-                            )
                         }
                     }
                 }
@@ -216,6 +317,10 @@ fun DeliveryValidationScreen(
                     isSigned = false
                     signerName = ""
                     notes = ""
+                    existingSignatureUrl = null
+                    photoBitmap = null
+                    hasPhoto = false
+                    existingImageUrl = null
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -247,6 +352,99 @@ fun DeliveryValidationScreen(
                     .height(100.dp),
                 maxLines = 3
             )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Photo de Livraison Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
+                border = BorderStroke(1.dp, Color.LightGray)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Photo de Preuve",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    if (!hasPhoto) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { takePhoto() },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.PhotoCamera,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Prendre une photo de preuve",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else {
+                        photoBitmap?.let { bitmap ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            ) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Photo de preuve",
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            OutlinedButton(
+                                onClick = { 
+                                    photoBitmap = null
+                                    hasPhoto = false
+                                    existingImageUrl = null
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Prendre une autre photo")
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
             
             // Action Buttons
             Row(
@@ -283,46 +481,44 @@ fun DeliveryValidationScreen(
                             scope.launch {
                                 isLoading = true
                                 try {
-                                    println("🔍 DEBUG: Starting conversion process...")
-                                    println("🔍 DEBUG: isSigned=$isSigned, shipmentId=$shipmentId, signerName='$signerName'")
+                                    println("🔍 DEBUG: Starting direct validation process...")
                                     
-                                    val signatureBase64 = captureSignatureAsBase64(signatureStrokes, currentStroke)
-                                    println("🔍 DEBUG: signatureBase64 result: ${if (signatureBase64 != null) "SUCCESS (${signatureBase64.length} chars)" else "NULL"}")
-                                    
-                                    if (signatureBase64 == null) {
-                                        println("🔍 DEBUG: Conversion failed - signatureBase64=$signatureBase64")
-                                        snackbarHostState.showSnackbar("Erreur lors de la conversion de la signature")
-                                        isLoading = false
-                                        return@launch
+                                    val signatureBase64 = if (existingSignatureUrl != null) {
+                                        existingSignatureUrl!!
+                                    } else {
+                                        val generated = captureSignatureAsBase64(signatureStrokes, currentStroke)
+                                        if (generated == null) {
+                                            snackbarHostState.showSnackbar("Erreur lors de la conversion de la signature")
+                                            isLoading = false
+                                            return@launch
+                                        }
+                                        generated
                                     }
                                     
-                                    val apiService = ApiClient.getRetrofit().create(DeliveryValidationApiService::class.java)
+                                    val photoBase64 = photoBitmap?.let { validationBitmapToBase64(it) }
                                     
-                                    println("🔍 DEBUG: API URL = ${ApiClient.getCurrentUrl()}")
                                     println("🔍 DEBUG: shipmentId = $shipmentId")
-                                    println("🔍 DEBUG: signerName = '$signerName'")
-                                    println("🔍 DEBUG: signatureBase64 length = ${signatureBase64.length}")
+                                    println("🔍 DEBUG: Calling direct PostgreSQL Neon validation...")
                                     
-                                    val request = DeliveryValidationRequest(
+                                    val result = directValidationRepo.validateDeliveryDirect(
                                         shipmentId = shipmentId,
-                                        signerName = signerName,
-                                        signatureData = signatureBase64,
-                                        imageData = null,
-                                        notes = notes.takeIf { it.isNotBlank() }
+                                        signatureBase64 = signatureBase64,
+                                        imageData = photoBase64
                                     )
                                     
-                                    println("🔍 DEBUG: Request created, calling API...")
-                                    val response = apiService.validateDelivery(request)
-                                    
-                                    if (response.isSuccessful && response.body()?.success == true) {
-                                        snackbarHostState.showSnackbar("Livraison validée avec succès!")
-                                        // Success - navigate back after short delay
-                                        kotlinx.coroutines.delay(1000)
-                                        navController.navigateUp()
-                                    } else {
-                                        val errorMsg = response.body()?.message ?: "Erreur lors de la validation"
-                                        snackbarHostState.showSnackbar(errorMsg)
-                                        println("Error saving validation: $errorMsg")
+                                    when (result) {
+                                        is com.example.delivery.repository.Result.Success -> {
+                                            snackbarHostState.showSnackbar("Livraison validée avec succès!")
+                                            // Success - navigate back after short delay
+                                            kotlinx.coroutines.delay(1000)
+                                            navController.navigateUp()
+                                        }
+                                        is com.example.delivery.repository.Result.Error -> {
+                                            val errorMsg = result.message
+                                            snackbarHostState.showSnackbar(errorMsg)
+                                            println("Error saving validation: $errorMsg")
+                                        }
+                                        else -> {}
                                     }
                                 } catch (e: Exception) {
                                     snackbarHostState.showSnackbar("Erreur: ${e.message}")
@@ -518,4 +714,26 @@ fun captureSignatureAsBase64(strokes: List<List<Offset>>, currentStroke: List<Of
         e.printStackTrace()
         null
     }
+}
+
+fun base64ToBitmap(base64Str: String): Bitmap? {
+    return try {
+        val cleanBase64 = if (base64Str.contains(",")) {
+            base64Str.substring(base64Str.indexOf(",") + 1)
+        } else {
+            base64Str
+        }
+        val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+fun validationBitmapToBase64(bitmap: Bitmap): String {
+    val outputStream = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+    val byteArray = outputStream.toByteArray()
+    return "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
 }

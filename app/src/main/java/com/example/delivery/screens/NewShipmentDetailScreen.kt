@@ -35,7 +35,7 @@ import com.example.delivery.models.ShipmentDetailFull
 import com.example.delivery.models.ShipmentDisplayStatus
 import com.example.delivery.models.getDisplayInfo
 import com.example.delivery.ui.DesignSystem
-import com.example.delivery.repository.ShipmentDetailRepository
+import com.example.delivery.repository.DirectShipmentDetailRepository
 import com.example.delivery.viewmodel.ShipmentDetailViewModel
 import com.example.delivery.viewmodel.ShipmentDetailState
 import com.example.delivery.viewmodel.ShipmentOperationState
@@ -239,7 +239,7 @@ private fun ShipmentDetailContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val repository = ShipmentDetailRepository()
+    val repository = DirectShipmentDetailRepository()
     val displayStatus = repository.getDisplayStatus(shipment)
     val statusInfo: Pair<String, String> = displayStatus.getDisplayInfo()
     val statusText = statusInfo.first
@@ -744,46 +744,16 @@ private fun ShipmentDetailContent(
         
         // Boutons d'action
         if (belongsToCurrentTrip) {
-            // Première rangée: Marquer livré (si non complété) et Validation
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(DesignSystem.Sizes.SPACING_MEDIUM)
-            ) {
-                if (displayStatus != ShipmentDisplayStatus.COMPLETED) {
-                    Button(
-                        onClick = onMarkAsDelivered,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
-                        shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = DesignSystem.Colors.SUCCESS_GREEN,
-                            contentColor = DesignSystem.Colors.SURFACE_WHITE
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = DesignSystem.Components.BUTTON_ELEVATION,
-                            pressedElevation = DesignSystem.Components.BUTTON_ELEVATION_PRESSED
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
-                        )
-                        Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_SMALL))
-                        Text("Marquer livré")
-                    }
-                }
-                
-                // Bouton Validation (toujours visible)
+            // Bouton Marquer livré (si non complété)
+            if (displayStatus != ShipmentDisplayStatus.COMPLETED) {
                 Button(
-                    onClick = onValidation,
+                    onClick = onMarkAsDelivered,
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
                     shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = DesignSystem.Colors.VALIDATION_BLUE,
+                        containerColor = DesignSystem.Colors.SUCCESS_GREEN,
                         contentColor = DesignSystem.Colors.SURFACE_WHITE
                     ),
                     elevation = ButtonDefaults.buttonElevation(
@@ -792,47 +762,13 @@ private fun ShipmentDetailContent(
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Verified,
+                        imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
                         modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
                     )
                     Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_SMALL))
-                    Text("Validation")
+                    Text("Marquer livré")
                 }
-            }
-            
-            Spacer(modifier = Modifier.height(DesignSystem.Sizes.SPACING_MEDIUM))
-            
-            // Deuxième rangée: Navigation
-            OutlinedButton(
-                onClick = { 
-                    println("🗺️ BOUTON CLIQUÉ DIRECTEMENT!")
-                    android.widget.Toast.makeText(context, "Bouton Naviguer cliqué directement!", android.widget.Toast.LENGTH_SHORT).show()
-                    onNavigateToMap()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
-                shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
-                border = BorderStroke(
-                    width = DesignSystem.Sizes.BORDER_MEDIUM,
-                    color = DesignSystem.Colors.NAVIGATION_GREEN
-                ),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = DesignSystem.Colors.NAVIGATION_GREEN
-                ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = DesignSystem.Components.BUTTON_ELEVATION,
-                    pressedElevation = DesignSystem.Components.BUTTON_ELEVATION_PRESSED
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Map,
-                    contentDescription = null,
-                    modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
-                )
-                Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_SMALL))
-                Text("Navigation")
             }
         }
     }

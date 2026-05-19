@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.delivery.models.ShipmentSearchData
 import com.example.delivery.models.ShipmentSearchState
 import com.example.delivery.models.ScannerState
-import com.example.delivery.repository.ShipmentRepository
+import com.example.delivery.repository.DirectShipmentRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +14,7 @@ import kotlin.Result
 
 class ShipmentSearchViewModel : ViewModel() {
     
-    private val repository = ShipmentRepository()
+    private val repository = DirectShipmentRepository()
     
     // États
     private val _searchState = MutableStateFlow<ShipmentSearchState>(ShipmentSearchState.Idle)

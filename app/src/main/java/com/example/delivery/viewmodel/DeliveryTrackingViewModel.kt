@@ -5,9 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.delivery.models.DeliveryItem
 import com.example.delivery.models.Trip
 import com.example.delivery.models.TripWithDeliveries
-import com.example.delivery.repository.DeliveryTrackingRepository
+import com.example.delivery.repository.DirectDeliveryTrackingRepository
 import com.example.delivery.repository.Result
-import com.example.delivery.repository.ShipmentRepository
+import com.example.delivery.repository.DirectShipmentRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,8 +20,8 @@ import java.time.format.DateTimeFormatter
  */
 class DeliveryTrackingViewModel : ViewModel() {
     
-    private val repository = DeliveryTrackingRepository()
-    private val shipmentRepository = ShipmentRepository()
+    private val repository = DirectDeliveryTrackingRepository()
+    private val shipmentRepository = DirectShipmentRepository()
     
     // Selected date state
     private val _selectedDate = MutableStateFlow(LocalDate.now())

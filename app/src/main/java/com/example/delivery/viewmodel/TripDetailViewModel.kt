@@ -7,6 +7,7 @@ import com.example.delivery.models.*
 import com.example.delivery.network.ApiClient
 import com.example.delivery.network.TripDetailApiService
 import com.example.delivery.network.DeliverShipmentRequest
+import com.example.delivery.repository.DirectTripDetailRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +16,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 class TripDetailViewModel(
-    private val apiService: TripDetailApiService = ApiClient.getRetrofit().create(TripDetailApiService::class.java)
+    private val apiService: TripDetailApiService = ApiClient.getRetrofit().create(TripDetailApiService::class.java),
+    private val directRepository: DirectTripDetailRepository = DirectTripDetailRepository()
 ) : ViewModel() {
     
     // États pour les détails du trajet
@@ -58,19 +60,12 @@ class TripDetailViewModel(
         
         viewModelScope.launch {
             try {
-                val response = apiService.getTripDetails(tripId)
-                if (response.isSuccessful && response.body() != null) {
-                    val body = response.body()!!
-                    if (body.success) {
-                        _tripDetailState.value = TripDetailState.Success(body.data)
-                    } else {
-                        _tripDetailState.value = TripDetailState.Error(
-                            body.error ?: "Erreur lors du chargement des détails"
-                        )
-                    }
+                val result = directRepository.getTripDetails(tripId)
+                if (result.isSuccess) {
+                    _tripDetailState.value = TripDetailState.Success(result.getOrNull()!!)
                 } else {
                     _tripDetailState.value = TripDetailState.Error(
-                        "Erreur serveur: ${response.code()}"
+                        result.exceptionOrNull()?.message ?: "Erreur lors du chargement des détails"
                     )
                 }
             } catch (e: Exception) {
@@ -275,20 +270,13 @@ class TripDetailViewModel(
     fun deliverShipment(tripId: Int, shipmentId: Int, request: DeliverShipmentRequest) {
         viewModelScope.launch {
             try {
-                val response = apiService.deliverShipment(tripId, shipmentId, request)
-                if (response.isSuccessful && response.body() != null) {
-                    val body = response.body()!!
-                    if (body.success) {
-                        // Recharger les détails du trajet
-                        loadTripDetails(tripId)
-                    } else {
-                        _tripDetailState.value = TripDetailState.Error(
-                            "Erreur lors de la livraison: ${body.error}"
-                        )
-                    }
+                val result = directRepository.deliverShipment(tripId, shipmentId, request)
+                if (result.isSuccess) {
+                    // Recharger les détails du trajet
+                    loadTripDetails(tripId)
                 } else {
                     _tripDetailState.value = TripDetailState.Error(
-                        "Erreur serveur: ${response.code()}"
+                        "Erreur lors de la livraison: ${result.exceptionOrNull()?.message}"
                     )
                 }
             } catch (e: Exception) {

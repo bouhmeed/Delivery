@@ -3,7 +3,7 @@ package com.example.delivery.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.delivery.models.ShipmentDetailFull
-import com.example.delivery.repository.ShipmentDetailRepository
+import com.example.delivery.repository.DirectShipmentDetailRepository
 import com.example.delivery.repository.Result
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
  */
 class ShipmentDetailViewModel : ViewModel() {
     
-    private val repository = ShipmentDetailRepository()
+    private val repository = DirectShipmentDetailRepository()
     
     // État pour les détails de la livraison
     private val _shipmentDetailState = MutableStateFlow<ShipmentDetailState>(ShipmentDetailState.Loading)

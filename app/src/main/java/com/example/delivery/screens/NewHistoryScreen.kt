@@ -37,11 +37,11 @@ import com.example.delivery.models.TripHistory
 import com.example.delivery.models.DriverStats
 import com.example.delivery.models.DriverStatsInfo
 import com.example.delivery.models.DeliveryHistoryItem
-import com.example.delivery.network.ApiClient
-import com.example.delivery.network.HistoryApiService
+import com.example.delivery.repository.DirectHistoryRepository
+import com.example.delivery.repository.DirectUserRepository
+import com.example.delivery.repository.Result as DbResult
 import android.widget.Toast
 import kotlinx.coroutines.launch
-import retrofit2.Response
 import java.net.SocketTimeoutException
 import java.net.ConnectException
 import java.net.UnknownHostException
@@ -120,8 +120,9 @@ fun NewHistoryScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     
-    // Services API
-    val historyApi = remember { ApiClient.instance.create(HistoryApiService::class.java) }
+    // Services direct Neon DB
+    val directHistoryRepo = remember { DirectHistoryRepository() }
+    val directUserRepo = remember { DirectUserRepository() }
     
     // Récupérer les informations de l'utilisateur pour obtenir le driverId
     var userInfo by remember { mutableStateOf<com.example.delivery.models.UserResponse?>(null) }
@@ -131,24 +132,23 @@ fun NewHistoryScreen(navController: NavController) {
             isLoading = true
             coroutineScope.launch {
                 try {
-                    // Récupérer les infos utilisateur avec l'API existante
-                    val userApi = ApiClient.instance.create(com.example.delivery.network.UserApiService::class.java)
-                    val userResponse = userApi.getUserByEmail(email)
+                    // Récupérer les infos utilisateur directement
+                    val userResult = directUserRepo.getUserByEmail(email)
                     
-                    if (userResponse.isSuccessful) {
-                        userInfo = userResponse.body()
+                    if (userResult.isSuccess) {
+                        userInfo = userResult.getOrNull()
                         userInfo?.driverId?.let { driverId ->
                             // Charger l'historique et les stats
-                            loadDriverHistory(historyApi, driverId, { history ->
+                            loadDriverHistory(directHistoryRepo, driverId, { history ->
                                 driverHistory = history
                             }, { error -> errorMessage = error })
                             
-                            loadDriverStats(historyApi, driverId, { stats ->
+                            loadDriverStats(directHistoryRepo, driverId, { stats ->
                                 driverStats = stats
                             }, { error -> errorMessage = error })
                         }
                     } else {
-                        errorMessage = "Erreur utilisateur: ${userResponse.code()}"
+                        errorMessage = "Erreur utilisateur: ${userResult.exceptionOrNull()?.message}"
                     }
                 } catch (e: Exception) {
                     errorMessage = "Erreur lors du chargement: ${e.message}"
@@ -177,11 +177,11 @@ fun NewHistoryScreen(navController: NavController) {
                                         isLoading = true
                                         errorMessage = null
                                         
-                                        loadDriverHistory(historyApi, driverId, { history ->
+                                        loadDriverHistory(directHistoryRepo, driverId, { history ->
                                             driverHistory = history
                                         }, { error -> errorMessage = error })
                                         
-                                        loadDriverStats(historyApi, driverId, { stats ->
+                                        loadDriverStats(directHistoryRepo, driverId, { stats ->
                                             driverStats = stats
                                         }, { error -> errorMessage = error })
                                         
@@ -951,24 +951,18 @@ private fun getStatusText(status: String?): String {
 
 // Helper functions for API calls
 private suspend fun loadDriverHistory(
-    api: HistoryApiService,
+    repository: DirectHistoryRepository,
     driverId: String,
     onSuccess: (TripHistory) -> Unit,
     onError: (String) -> Unit
 ) {
     try {
-        val response = api.getDriverHistory(driverId)
-        if (response.isSuccessful) {
-            response.body()?.let { onSuccess(it) }
-        } else {
-            onError("Erreur HTTP: ${response.code()}")
+        val driverIdInt = driverId.toIntOrNull() ?: 5
+        when (val result = repository.getDriverHistory(driverIdInt)) {
+            is DbResult.Success -> onSuccess(result.data)
+            is DbResult.Error -> onError(result.message)
+            else -> onError("Erreur direct db")
         }
-    } catch (e: SocketTimeoutException) {
-        onError("Timeout: Le serveur ne répond pas")
-    } catch (e: ConnectException) {
-        onError("Connexion refusée")
-    } catch (e: UnknownHostException) {
-        onError("Hôte inconnu")
     } catch (e: Exception) {
         onError("Erreur: ${e.message}")
     }
@@ -1098,12 +1092,30 @@ private fun filterByPeriod(
 
 // Helper function to parse date with multiple formats
 private fun parseDate(dateString: String): java.time.LocalDate? {
+    if (dateString.isBlank()) return null
+    try {
+        val trimmed = dateString.trim()
+        if (trimmed.length >= 10) {
+            val prefix = trimmed.substring(0, 10)
+            if (prefix[4] == '-' && prefix[7] == '-') {
+                return java.time.LocalDate.parse(prefix, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            }
+            if (prefix[2] == '/' && prefix[5] == '/') {
+                return java.time.LocalDate.parse(prefix, java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            }
+        }
+    } catch (e: Exception) {
+        // Fallback
+    }
+
     val formats = listOf(
         "yyyy-MM-dd",
         "yyyy-MM-dd'T'HH:mm:ss",
         "yyyy-MM-dd'T'HH:mm:ss.SSS",
         "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
         "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm:ss.SSS",
         "dd/MM/yyyy",
         "MM/dd/yyyy"
     )
@@ -1111,7 +1123,7 @@ private fun parseDate(dateString: String): java.time.LocalDate? {
     for (format in formats) {
         try {
             val formatter = java.time.format.DateTimeFormatter.ofPattern(format)
-            return java.time.LocalDate.parse(dateString, formatter)
+            return java.time.LocalDate.parse(dateString.trim(), formatter)
         } catch (e: Exception) {
             // Try next format
         }
@@ -1122,17 +1134,17 @@ private fun parseDate(dateString: String): java.time.LocalDate? {
 }
 
 private suspend fun loadDriverStats(
-    api: HistoryApiService,
+    repository: DirectHistoryRepository,
     driverId: String,
     onSuccess: (DriverStats) -> Unit,
     onError: (String) -> Unit
 ) {
     try {
-        val response = api.getDriverStats(driverId)
-        if (response.isSuccessful) {
-            response.body()?.let { onSuccess(it) }
-        } else {
-            onError("Erreur HTTP: ${response.code()}")
+        val driverIdInt = driverId.toIntOrNull() ?: 5
+        when (val result = repository.getDriverStats(driverIdInt)) {
+            is DbResult.Success -> onSuccess(result.data)
+            is DbResult.Error -> onError(result.message)
+            else -> onError("Erreur direct db")
         }
     } catch (e: Exception) {
         onError("Erreur stats: ${e.message}")

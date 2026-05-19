@@ -30,8 +30,8 @@ class AuthManager(private val context: Context) {
                     // Extract user info from ID token
                     val userInfo = extractUserInfoFromToken(result.idToken ?: result.accessToken)
                     
-                    // Save user info locally
-                    saveUserInfo(userInfo)
+                    // Save user info and JWT locally
+                    saveUserInfo(userInfo, result.accessToken)
                     
                     onSuccess(result, userInfo)
                 }
@@ -71,11 +71,12 @@ class AuthManager(private val context: Context) {
         }
     }
 
-    private fun saveUserInfo(userInfo: UserInfo) {
+    private fun saveUserInfo(userInfo: UserInfo, accessToken: String?) {
         prefs.edit().apply {
             putString("user_email", userInfo.email)
             putString("user_name", userInfo.name)
             putString("user_nickname", userInfo.nickname)
+            putString("access_token", accessToken)
             apply()
         }
     }
@@ -86,6 +87,10 @@ class AuthManager(private val context: Context) {
 
     fun getUserName(): String? {
         return prefs.getString("user_name", null)
+    }
+
+    fun getAccessToken(): String? {
+        return prefs.getString("access_token", null)
     }
 
     fun logout(onSuccess: () -> Unit, onFailure: (AuthenticationException) -> Unit) {

@@ -150,9 +150,10 @@ object DesignSystem {
         // Fonction pour obtenir la couleur de statut
         fun getStatusColor(isCompleted: Boolean, status: String? = null): Color {
             return when {
-                isCompleted -> Colors.STATUS_COMPLETED
+                status == "DELIVERED" -> Colors.STATUS_COMPLETED
                 status == "EXPEDITION" -> Colors.STATUS_IN_PROGRESS
                 status == "TO_PLAN" -> Colors.STATUS_PENDING
+                isCompleted -> Colors.STATUS_COMPLETED
                 else -> Colors.STATUS_PENDING
             }
         }

@@ -65,11 +65,7 @@ import java.time.format.DateTimeFormatter
 fun TourneeScreen(navController: NavController) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val tripApiService = ApiClient.instance.create(TripApiService::class.java)
-    val userApiService = ApiClient.instance.create(UserApiService::class.java)
-    val vehicleApiService = ApiClient.instance.create(VehicleApiService::class.java)
-    val driverApiService = ApiClient.instance.create(DriverApiService::class.java)
-    val shipmentApiService = ApiClient.instance.create(ShipmentApiService::class.java)
+    val directRepo = remember { com.example.delivery.repository.DirectTourneeRepository() }
     val authManager = remember { AuthManager(context) }
     
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
@@ -109,31 +105,12 @@ fun TourneeScreen(navController: NavController) {
         if (!tripShipments.containsKey(tripId)) {
             coroutineScope.launch {
                 try {
-                    val response: Response<List<com.example.delivery.models.ShipmentSearchDetail>> = shipmentApiService.getShipmentsByTrip(tripId)
-                    if (response.isSuccessful) {
-                        val rawShipments = response.body() ?: emptyList()
-                        // Mapper la réponse brute vers ShipmentSearchDetail
-                        val mappedShipments = rawShipments.map { raw ->
-                            com.example.delivery.models.ShipmentSearchDetail(
-                                id = raw.id,
-                                shipmentNo = raw.shipmentNo,
-                                trackingNumber = raw.trackingNumber,
-                                status = raw.status,
-                                description = raw.description ?: "",
-                                quantity = 1, // Valeur par défaut
-                                deliveryAddress = "", // Valeur par défaut
-                                deliveryCity = raw.deliveryCity ?: "",
-                                deliveryZipCode = "", // Valeur par défaut
-                                customerId = 0, // Valeur par défaut
-                                priority = "NORMAL", // Valeur par défaut
-                                plannedStart = null,
-                                plannedEnd = null
-                            )
-                        }
+                    val result = directRepo.getShipmentsByTrip(tripId)
+                    if (result.isSuccess) {
+                        val mappedShipments = result.getOrNull() ?: emptyList()
                         tripShipments = tripShipments + (tripId to mappedShipments)
-                        // Toast.makeText(context, "✅ ${mappedShipments.size} expéditions chargées pour trip $tripId", Toast.LENGTH_SHORT).show()
                     } else {
-                        // Toast.makeText(context, "❌ Erreur chargement expéditions trip $tripId: ${response.code()}", Toast.LENGTH_SHORT).show()
+                        // Error handling if needed
                     }
                 } catch (e: Exception) {
                     // Toast.makeText(context, "❌ Exception chargement expéditions trip $tripId: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -148,13 +125,11 @@ fun TourneeScreen(navController: NavController) {
             isLoadingTrips = true
             tripError = null
             try {
-                val response: Response<List<Trip>> = tripApiService.getTripsByDriver(driverId)
-                if (response.isSuccessful) {
-                    trips = response.body() ?: emptyList()
-                    // Toast.makeText(context, "✅ ${trips.size} trajets chargés pour le driver", Toast.LENGTH_SHORT).show()
+                val result = directRepo.getTripsByDriver(driverId)
+                if (result.isSuccess) {
+                    trips = result.getOrNull() ?: emptyList()
                 } else {
-                    tripError = "Erreur ${response.code()}: ${response.message()}"
-                    // Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
+                    tripError = "Erreur: ${result.exceptionOrNull()?.message}"
                 }
             } catch (e: Exception) {
                 tripError = "Exception: ${e.message}"
@@ -172,11 +147,11 @@ fun TourneeScreen(navController: NavController) {
             try {
                 val userEmail = authManager.getUserEmail()
                 if (userEmail != null) {
-                    val response = userApiService.getUserByEmail(userEmail)
-                    if (response.isSuccessful) {
-                        currentDriver = response.body()
+                    val result = directRepo.getUserByEmail(userEmail)
+                    if (result.isSuccess) {
+                        currentDriver = result.getOrNull()
                         // Une fois le driver chargé, charger ses trips
-                        val driverId = response.body()?.driverId?.toString()
+                        val driverId = currentDriver?.driverId?.toString()
                         if (driverId != null) {
                             loadDriverTrips(driverId)
                         } else {
@@ -184,7 +159,7 @@ fun TourneeScreen(navController: NavController) {
                             isLoadingTrips = false
                         }
                     } else {
-                        tripError = "Erreur chargement utilisateur: ${response.code()}"
+                        tripError = "Erreur chargement utilisateur: ${result.exceptionOrNull()?.message}"
                     }
                 } else {
                     tripError = "Utilisateur non connecté"
@@ -371,8 +346,7 @@ fun TourneeScreen(navController: NavController) {
                 items(tripsForSelectedDate) { trip ->
                     TripDetailCard(
                         trip = trip,
-                        vehicleApiService = vehicleApiService,
-                        driverApiService = driverApiService,
+                        directRepo = directRepo,
                         vehicleCache = vehicleCache,
                         driverCache = driverCache,
                         onVehicleLoaded = { id, vehicle -> addToVehicleCache(id, vehicle) },
@@ -382,7 +356,6 @@ fun TourneeScreen(navController: NavController) {
                             val tripDateFormatted = trip.tripDate.substring(0, 10) // Extraire YYYY-MM-DD
                             navController.navigate("delivery?date=$tripDateFormatted")
                         },
-                        shipmentApiService = shipmentApiService,
                         tripShipments = tripShipments,
                         onLoadShipments = { tripId -> loadTripShipments(tripId) },
                         navController = navController
@@ -746,14 +719,12 @@ fun ShipmentItemRow(shipment: com.example.delivery.models.ShipmentSearchDetail) 
 @Composable
 fun TripDetailCard(
     trip: Trip,
-    vehicleApiService: VehicleApiService,
-    driverApiService: DriverApiService,
+    directRepo: com.example.delivery.repository.DirectTourneeRepository,
     vehicleCache: Map<String, Vehicle>,
     driverCache: Map<String, Driver>,
     onVehicleLoaded: (String, Vehicle) -> Unit,
     onDriverLoaded: (String, Driver) -> Unit,
     onTripClick: (String) -> Unit,
-    shipmentApiService: ShipmentApiService? = null,
     tripShipments: Map<Int, List<com.example.delivery.models.ShipmentSearchDetail>>? = null,
     onLoadShipments: ((Int) -> Unit)? = null,
     navController: NavController
@@ -818,9 +789,9 @@ fun TripDetailCard(
                 try {
                     // Récupérer les infos du véhicule si pas en cache
                     if (currentVehicle == null && vehicleId != "N/A") {
-                        val vehicleResponse = vehicleApiService.getVehicleById(vehicleId)
-                        if (vehicleResponse.isSuccessful) {
-                            vehicleResponse.body()?.let { v ->
+                        val result = directRepo.getVehicleById(vehicleId)
+                        if (result.isSuccess) {
+                            result.getOrNull()?.let { v ->
                                 vehicle = v
                                 onVehicleLoaded(vehicleId, v)
                             }
@@ -829,9 +800,9 @@ fun TripDetailCard(
                     
                     // Récupérer les infos du chauffeur si pas en cache
                     if (currentDriver == null && driverId != "N/A") {
-                        val driverResponse = driverApiService.getDriverById(driverId)
-                        if (driverResponse.isSuccessful) {
-                            driverResponse.body()?.let { d ->
+                        val result = directRepo.getDriverById(driverId)
+                        if (result.isSuccess) {
+                            result.getOrNull()?.let { d ->
                                 driver = d
                                 onDriverLoaded(driverId, d)
                             }
