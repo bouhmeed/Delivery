@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.main
+package com.example.delivery.screens.main
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -36,7 +36,6 @@ import com.example.delivery.components.CurrentDayCard
 import com.example.delivery.components.MaintenanceAlertCard
 import com.example.delivery.components.VehicleMaintenanceSection
 import com.example.delivery.navigation.Screen
-import com.example.delivery.data.DeliveryData
 import com.example.delivery.auth.AuthManager
 import com.example.delivery.repository.user.UserRepository
 import com.example.delivery.repository.driver.DriverRepository
