@@ -54,9 +54,19 @@ android {
 
 
 
-    buildTypes {
+    signingConfigs {
+    create("release") {
+        storeFile = file("release-key.jks")
+        storePassword = "Delevry-App@AlmaKom2026!"
+        keyAlias = "deliveryReleaseKey"
+        keyPassword = "Delevry-App@AlmaKom2026!"
+    }
+}
+
+buildTypes {
 
         release {
+        signingConfig = signingConfigs.getByName("release")
 
             isMinifyEnabled = false
 

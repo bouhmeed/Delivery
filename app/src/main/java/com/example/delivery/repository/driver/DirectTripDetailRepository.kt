@@ -1,4 +1,4 @@
-﻿package com.example.delivery.repository.driver
+package com.example.delivery.repository.driver
 
 import android.util.Log
 import com.example.delivery.database.DatabaseManager
@@ -45,8 +45,8 @@ class DirectTripDetailRepository {
             val depotJson = JSONObject(DatabaseManager.executeQuery(depotQuery)).optJSONArray("rows")?.optJSONObject(0)
 
             // 5. Fetch Stops
-            val stopsQuery = "SELECT * FROM \"TripStop\" WHERE \"tripId\" = $tripId"
-            val stopsJson = JSONObject(DatabaseManager.executeQuery(stopsQuery)).optJSONArray("rows")
+            // Stops fetching removed as per requirement
+            // val stops = emptyList<TripStopDetail>()
 
             // 6. Fetch Shipments
             val shipmentsQuery = """
@@ -57,7 +57,9 @@ class DirectTripDetailRepository {
             """.trimIndent()
             val shipmentsJson = JSONObject(DatabaseManager.executeQuery(shipmentsQuery)).optJSONArray("rows")
 
-            // Parse objects
+            // Ensure TripStopDetail data class includes latitude and longitude
+            // (Modify the model file if needed)
+
             val tripDetail = TripDetail(
                 id = tripRow.getInt("id"),
                 tripId = tripRow.optString("tripId", ""),
@@ -111,92 +113,101 @@ class DirectTripDetailRepository {
                 locationType = depotJson?.optString("locationType")
             )
 
-            val stops = mutableListOf<TripStopDetail>()
-            if (stopsJson != null) {
-                for (i in 0 until stopsJson.length()) {
-                    val row = stopsJson.getJSONObject(i)
-                    stops.add(TripStopDetail(
-                        id = row.optInt("id"),
-                        tripId = row.optInt("tripId"),
-                        sequence = row.optInt("sequence"),
-                        locationId = row.optInt("locationId"),
-                        stopType = row.optString("stopType"),
-                        locationName = row.optString("locationName"),
-                        locationAddress = row.optString("locationAddress"),
-                        locationCity = row.optString("locationCity"),
-                        locationPostalCode = row.optString("locationPostalCode"),
-                        estimatedArrival = row.optString("estimatedArrival"),
-                        actualArrival = row.optString("actualArrival"),
-                        estimatedDeparture = row.optString("estimatedDeparture"),
-                        actualDeparture = row.optString("actualDeparture"),
-                        shipments = emptyList()
-                    ))
-                }
-            }
-
+            // Stops removed per requirement
             val shipments = mutableListOf<ShipmentDetail>()
             if (shipmentsJson != null) {
                 for (i in 0 until shipmentsJson.length()) {
                     val sRow = shipmentsJson.getJSONObject(i)
-                    shipments.add(ShipmentDetail(
-                        id = sRow.optInt("id"),
-                        shipmentNo = sRow.optString("shipmentNo"),
-                        customerId = if (!sRow.isNull("customerId")) sRow.optInt("customerId") else null,
-                        type = sRow.optString("type", ""),
-                        originId = sRow.optInt("originId", 0),
-                        destinationId = sRow.optInt("destinationId", 0),
-                        priority = sRow.optString("priority", ""),
-                        requestedPickup = sRow.optString("requestedPickup"),
-                        requestedDelivery = sRow.optString("requestedDelivery"),
-                        status = sRow.optString("status", ""),
-                        description = sRow.optString("description", ""),
-                        quantity = sRow.optInt("quantity", 0),
-                        uom = sRow.optString("uom", ""),
-                        packaging = sRow.optString("packaging"),
-                        weight = if (!sRow.isNull("weight")) sRow.optDouble("weight") else null,
-                        volume = if (!sRow.isNull("volume")) sRow.optDouble("volume") else null,
-                        stackable = if (!sRow.isNull("stackable")) sRow.optBoolean("stackable") else null,
-                        carrier = sRow.optString("carrier"),
-                        trackingNumber = sRow.optString("trackingNumber"),
-                        deliveryAddress = sRow.optString("deliveryAddress"),
-                        deliveryCity = sRow.optString("deliveryCity"),
-                        deliveryZipCode = sRow.optString("deliveryZipCode"),
-                        deliveryCountry = sRow.optString("deliveryCountry", ""),
-                        driverId = if (!sRow.isNull("driverId")) sRow.optInt("driverId") else null,
-                        vehicleId = if (!sRow.isNull("vehicleId")) sRow.optInt("vehicleId") else null,
-                        estimatedDuration = if (!sRow.isNull("estimatedDuration")) sRow.optInt("estimatedDuration") else null,
-                        plannedEnd = sRow.optString("plannedEnd"),
-                        plannedStart = sRow.optString("plannedStart"),
-                        distanceKm = if (!sRow.isNull("distanceKm")) sRow.optDouble("distanceKm") else null,
-                        tripSequence = if (!sRow.isNull("tripSequence")) sRow.optInt("tripSequence") else null,
-                        shipmentRole = sRow.optString("shipmentRole"),
-                        linkStatus = null,
-                        podDone = null,
-                        returnsDone = null,
-                        customerName = null,
-                        customerAddress = null,
-                        customerCity = null,
-                        customerPhone = null,
-                        originName = null,
-                        originAddress = null,
-                        originCity = null,
-                        destinationName = null,
-                        destinationAddress = null,
-                        destinationCity = null,
-                        vehicleName = null,
-                        vehicleRegistration = null,
-                        origin = LocationDetail(id = sRow.optInt("originId", 0), name = "Origin", address = null, city = null, postalCode = null, country = null, latitude = null, longitude = null, locationType = null),
-                        destination = LocationDetail(id = sRow.optInt("destinationId", 0), name = "Destination", address = null, city = null, postalCode = null, country = null, latitude = null, longitude = null, locationType = null),
-                        customer = null,
-                        executionStatus = null
-                    ))
+                    
+                    val originId = sRow.optInt("originId", 0)
+                    val destinationId = sRow.optInt("destinationId", 0)
+                    // Fetch origin location details
+                    val originLocationJson = JSONObject(DatabaseManager.executeQuery("SELECT * FROM \"Location\" WHERE id = $originId")).optJSONArray("rows")?.optJSONObject(0)
+                    // Fetch destination location details
+                    val destinationLocationJson = JSONObject(DatabaseManager.executeQuery("SELECT * FROM \"Location\" WHERE id = $destinationId")).optJSONArray("rows")?.optJSONObject(0)
+                    val origin = LocationDetail(
+                        id = originId,
+                        name = originLocationJson?.optString("name") ?: "Origin",
+                        address = originLocationJson?.optString("address"),
+                        city = originLocationJson?.optString("city"),
+                        postalCode = originLocationJson?.optString("postalCode"),
+                        country = originLocationJson?.optString("country"),
+                        latitude = if (originLocationJson != null && !originLocationJson.isNull("latitude")) originLocationJson.optDouble("latitude") else null,
+                        longitude = if (originLocationJson != null && !originLocationJson.isNull("longitude")) originLocationJson.optDouble("longitude") else null,
+                        locationType = originLocationJson?.optString("locationType")
+                    )
+                    val destination = LocationDetail(
+                        id = destinationId,
+                        name = destinationLocationJson?.optString("name") ?: "Destination",
+                        address = destinationLocationJson?.optString("address"),
+                        city = destinationLocationJson?.optString("city"),
+                        postalCode = destinationLocationJson?.optString("postalCode"),
+                        country = destinationLocationJson?.optString("country"),
+                        latitude = if (destinationLocationJson != null && !destinationLocationJson.isNull("latitude")) destinationLocationJson.optDouble("latitude") else null,
+                        longitude = if (destinationLocationJson != null && !destinationLocationJson.isNull("longitude")) destinationLocationJson.optDouble("longitude") else null,
+                        locationType = destinationLocationJson?.optString("locationType")
+                    )
+
+                    shipments.add(
+    ShipmentDetail(
+        id = sRow.optInt("id"),
+        shipmentNo = sRow.optString("shipmentNo"),
+        customerId = if (!sRow.isNull("customerId")) sRow.optInt("customerId") else null,
+        type = sRow.optString("type", ""),
+        originId = originId,
+        destinationId = destinationId,
+        priority = sRow.optString("priority", ""),
+        requestedPickup = sRow.optString("requestedPickup"),
+        requestedDelivery = sRow.optString("requestedDelivery"),
+        status = sRow.optString("status", ""),
+        description = sRow.optString("description", ""),
+        quantity = sRow.optInt("quantity", 0),
+        uom = sRow.optString("uom", ""),
+        packaging = sRow.optString("packaging"),
+        weight = if (!sRow.isNull("weight")) sRow.optDouble("weight") else null,
+        volume = if (!sRow.isNull("volume")) sRow.optDouble("volume") else null,
+        stackable = if (!sRow.isNull("stackable")) sRow.optBoolean("stackable") else null,
+        carrier = sRow.optString("carrier"),
+        trackingNumber = sRow.optString("trackingNumber"),
+        deliveryAddress = sRow.optString("deliveryAddress"),
+        deliveryCity = sRow.optString("deliveryCity"),
+        deliveryZipCode = sRow.optString("deliveryZipCode"),
+        deliveryCountry = sRow.optString("deliveryCountry", ""),
+        driverId = if (!sRow.isNull("driverId")) sRow.optInt("driverId") else null,
+        vehicleId = if (!sRow.isNull("vehicleId")) sRow.optInt("vehicleId") else null,
+        estimatedDuration = if (!sRow.isNull("estimatedDuration")) sRow.optInt("estimatedDuration") else null,
+        plannedEnd = sRow.optString("plannedEnd"),
+        plannedStart = sRow.optString("plannedStart"),
+        distanceKm = if (!sRow.isNull("distanceKm")) sRow.optDouble("distanceKm") else null,
+        tripSequence = if (!sRow.isNull("tripSequence")) sRow.optInt("tripSequence") else null,
+        shipmentRole = sRow.optString("shipmentRole"),
+        linkStatus = null,
+        podDone = null,
+        returnsDone = null,
+        customerName = null,
+        customerAddress = null,
+        customerCity = null,
+        customerPhone = null,
+        originName = origin.name,
+        originAddress = origin.address,
+        originCity = origin.city,
+        destinationName = destination.name,
+        destinationAddress = destination.address,
+        destinationCity = destination.city,
+        vehicleName = null,
+        vehicleRegistration = null,
+        customer = null,
+        executionStatus = null,
+        origin = origin,
+        destination = destination
+                    ) )
                 }
             }
 
             Result.success(TripDetailData(
                 trip = tripDetail,
                 shipments = shipments,
-                stops = stops,
+                stops = emptyList(), // Stops removed per requirement
                 driver = driverDetail,
                 vehicle = vehicleDetail,
                 depot = depotDetail

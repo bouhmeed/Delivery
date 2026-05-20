@@ -71,8 +71,8 @@ fun TripStopCard(
                         )
                         Text(
                             text = when (stop.stopType.uppercase()) {
-                                "PICKUP" -> "Point de collecte"
-                                "DELIVERY" -> "Point de livraison"
+                                "PICKUP" -> "Origine"
+                                "DELIVERY" -> "Destination"
                                 else -> "Arrêt"
                             },
                             style = MaterialTheme.typography.bodySmall,

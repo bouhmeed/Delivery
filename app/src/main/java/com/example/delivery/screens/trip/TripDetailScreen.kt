@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.trip
+package com.example.delivery.screens.trip
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -31,6 +31,8 @@ import com.example.delivery.models.driver.*
 import com.example.delivery.models.user.*
 import com.example.delivery.models.vehicle.*
 import com.example.delivery.components.TripStopCard
+// Removed unused import (TripStopCard not used in this screen)
+
 import com.example.delivery.components.ShipmentDetailCard
 import com.example.delivery.network.api.driver.DeliverShipmentRequest
 import com.example.delivery.viewmodel.trip.TripDetailViewModel
@@ -211,31 +213,6 @@ fun TripDetailContent(
             DriverVehicleCard(
                 driver = tripDetail.driver,
                 vehicle = tripDetail.vehicle
-            )
-        }
-        
-        // Arrêts du trajet
-        item {
-            Text(
-                text = "Arrêts du trajet",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-        }
-        
-        items(tripDetail.stops.sortedBy { it.sequence }) { stop ->
-            TripStopCard(
-                stop = stop,
-                shipments = tripDetail.shipments.filter { shipment ->
-                    // Filtrer les shipments pour cet arrêt
-                    when (stop.stopType.uppercase()) {
-                        "PICKUP" -> shipment.originId == stop.locationId
-                        "DELIVERY" -> shipment.destinationId == stop.locationId
-                        else -> false
-                    }
-                }
             )
         }
         
@@ -505,13 +482,6 @@ fun DriverVehicleCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = driver.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Chauffeur",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
