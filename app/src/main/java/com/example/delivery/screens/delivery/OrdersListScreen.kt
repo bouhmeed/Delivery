@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.delivery
+package com.example.delivery.screens.delivery
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape

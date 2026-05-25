@@ -1,187 +1,102 @@
+// HomeScreen.kt – UI layer only, all data handled by HomeViewModel
 package com.example.delivery.screens.main
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+// Added import for FontWeight
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+
+// Updated lambda for onMarkAsDelivered to use selectedShipmentData
+
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import android.content.Context
-import kotlin.Result
-import com.example.delivery.components.BottomNavigationBar
-import com.example.delivery.components.TodayTourCard
-import com.example.delivery.components.QuickActionsCard
-import com.example.delivery.components.DayIndicatorCard
-import com.example.delivery.components.CurrentDayCard
-import com.example.delivery.components.MaintenanceAlertCard
-import com.example.delivery.components.VehicleMaintenanceSection
-import com.example.delivery.navigation.Screen
+import androidx.navigation.NavController
+
+import com.example.delivery.components.*
 import com.example.delivery.auth.AuthManager
-import com.example.delivery.repository.user.UserRepository
-import com.example.delivery.repository.driver.DriverRepository
-import com.example.delivery.repository.vehicle.VehicleRepository
-import com.example.delivery.repository.user.DirectUserRepository
-import com.example.delivery.repository.driver.DirectDriverRepository
-import com.example.delivery.repository.vehicle.DirectVehicleRepository
-import com.example.delivery.models.user.UserResponse
-import com.example.delivery.models.driver.Driver
-import com.example.delivery.models.vehicle.Vehicle
-import com.example.delivery.models.vehicle.VehicleMaintenance
-import com.example.delivery.models.vehicle.MaintenanceAlert
-import com.example.delivery.network.config.ApiClient
+import com.example.delivery.viewmodel.home.HomeViewModel
+import com.example.delivery.viewmodel.home.HomeUiState
 import com.example.delivery.viewmodel.delivery.TodayTourViewModel
 import com.example.delivery.viewmodel.delivery.TodayTourState
 import com.example.delivery.viewmodel.delivery.ShipmentSearchViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.delivery.models.delivery.ShipmentSearchState
 import com.example.delivery.models.delivery.ShipmentSearchData
+import androidx.compose.runtime.*
 import com.example.delivery.screens.components.ManualEntryDialog
 import com.example.delivery.screens.delivery.ShipmentDetailScreen
-import java.time.LocalDate
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
-    var selectedDate: LocalDate by remember { mutableStateOf(LocalDate.now()) }
-    
-    // Auth et récupération des données utilisateur
-    val context: Context = LocalContext.current
-    val authManager: AuthManager = remember { AuthManager(context) }
-    val userEmail: String? = authManager.getUserEmail()
-    val coroutineScope: CoroutineScope = rememberCoroutineScope()
-    
-    // États pour les données utilisateur, chauffeur et véhicule
-    var userInfo: UserResponse? by remember { mutableStateOf(null) }
-    var driverInfo: Driver? by remember { mutableStateOf(null) }
-    var vehicleInfo: Vehicle? by remember { mutableStateOf(null) }
-    var maintenanceAlert: MaintenanceAlert? by remember { mutableStateOf(null) }
-    var vehicleMaintenance: List<VehicleMaintenance> by remember { mutableStateOf(emptyList()) }
-    var isLoading: Boolean by remember { mutableStateOf(false) }
-    
-    // ViewModel pour la tournée du jour
+    // Authentication
+    val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    val userEmail = authManager.getUserEmail()
+
+    // ViewModels
+    val homeViewModel: HomeViewModel = viewModel()
+    // Observe unread notification count
+    val unreadCount by homeViewModel.unreadCount.collectAsStateWithLifecycle()
+    val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+    // ViewModel for today tour
     val todayTourViewModel: TodayTourViewModel = viewModel()
-    val todayTourState: TodayTourState by todayTourViewModel.todayTourState.collectAsStateWithLifecycle()
-    
-    // Shipment Search ViewModel
-    val shipmentSearchViewModel: ShipmentSearchViewModel = viewModel()
-    val shipmentSearchState: ShipmentSearchState by shipmentSearchViewModel.searchState.collectAsStateWithLifecycle()
-    
-    // États pour les dialogues et navigation
-    var showManualEntryDialog: Boolean by remember { mutableStateOf(false) }
-    var showShipmentDetail: Boolean by remember { mutableStateOf(false) }
-    var selectedShipmentData: ShipmentSearchData? by remember { mutableStateOf(null) }
-    
-    // Récupérer les données utilisateur et chauffeur
-    LaunchedEffect(userEmail) {
-        userEmail?.let { email ->
-            isLoading = true
-            coroutineScope.launch {
-                // Récupérer l'utilisateur (Direct Neon Connection)
-                val userRepository = DirectUserRepository()
-                userRepository.getUserByEmail(email)
-                    .onSuccess { user ->
-                        userInfo = user
-                        println("👤 USER CAPTURED - ID: ${user.id}, Email: ${user.email}, Name: ${user.firstName} ${user.lastName}, Role: ${user.role}, DriverId: ${user.driverId}")
-                        
-                        // Si l'utilisateur a un driverId, récupérer les infos du chauffeur
-                        println("👤 User driverId: ${user.driverId}")
-                        user.driverId?.let { driverId ->
-                            println("🚗 Attempting to fetch driver with ID: $driverId")
-                            try {
-                                val driverIdInt = driverId.toInt()
-                                
-                                // Configurer le driverId pour les ViewModels
-                                todayTourViewModel.setDriverId(driverIdInt)
-                                shipmentSearchViewModel.setDriverId(driverIdInt)
-                                
-                                // Récupérer le chauffeur (Direct Neon Connection)
-                                val driverRepository = DirectDriverRepository()
-                                driverRepository.getDriverById(driverId)
-                                    .onSuccess { driver ->
-                                        println("✅ Driver found: ${driver.name}")
-                                        driverInfo = driver
-                                        
-                                        // Récupérer le véhicule du chauffeur (Direct Neon Connection)
-                                        val vehicleRepository = DirectVehicleRepository()
-                                        vehicleRepository.getVehicleByDriverId(driverId)
-                                            .onSuccess { vehicle ->
-                                                vehicleInfo = vehicle
-                                                
-                                                // Récupérer les données de maintenance du véhicule (Direct Neon Connection)
-                                                vehicle?.id?.let { vehicleId ->
-                                                    println("🔧 HomeScreen: Loading maintenance for vehicle ID: $vehicleId")
-                                                    vehicleRepository.getVehicleMaintenance(vehicleId.toString())
-                                                        .onSuccess { maintenance ->
-                                                            println("🔧 HomeScreen: Maintenance loaded successfully: ${maintenance.size} items")
-                                                            vehicleMaintenance = maintenance
-                                                            val alert = vehicleRepository.calculateMaintenanceAlert(maintenance)
-                                                            // Set vehicle name and registration in alert
-                                                            alert?.let {
-                                                                maintenanceAlert = it.copy(
-                                                                    vehicleName = vehicle.name,
-                                                                    registration = vehicle.registration
-                                                                )
-                                                            }
-                                                            println("🔧 HomeScreen: Alert calculated: ${alert?.warningLevel}")
-                                                        }
-                                                        .onFailure { error ->
-                                                            println("🔧 HomeScreen: Error loading maintenance: ${error.message}")
-                                                        }
-                                                } ?: run {
-                                                    println("🔧 HomeScreen: No vehicle ID found")
-                                                }
-                                            }
-                                            .onFailure { error ->
-                                                println("Erreur lors de la récupération du véhicule: ${error.message}")
-                                            }
-                                    }
-                                    .onFailure { error ->
-                                        println("Erreur lors de la récupération du chauffeur: ${error.message}")
-                                    }
-                            } catch (e: NumberFormatException) {
-                                println("Erreur: driverId n'est pas un nombre valide: $driverId")
-                            }
-                        }
-                    }
-                    .onFailure { error ->
-                        println("Erreur lors de la récupération de l'utilisateur: ${error.message}")
-                    }
-                isLoading = false
-            }
+
+    // Trigger loading of today tour when driver info becomes available
+    LaunchedEffect((uiState as? HomeUiState.Success)?.driverInfo?.id) {
+        val driverIdString = (uiState as? HomeUiState.Success)?.driverInfo?.id
+        driverIdString?.toIntOrNull()?.let { id ->
+            todayTourViewModel.setDriverId(id)
         }
     }
-    
+
+    val todayTourState by todayTourViewModel.todayTourState.collectAsStateWithLifecycle()
+
+    val shipmentSearchViewModel: ShipmentSearchViewModel = viewModel()
+    val shipmentSearchState by shipmentSearchViewModel.searchState.collectAsStateWithLifecycle()
+
+    // Load data when email becomes available
+    LaunchedEffect(userEmail) {
+        userEmail?.let { email ->
+            homeViewModel.loadData(email)
+            // Load unread notifications once user data is available
+            homeViewModel.loadUnreadCount()
+        }
+    }
+
+    // UI state for dialogs
+    var showManualEntryDialog by remember { mutableStateOf(false) }
+    var showShipmentDetail by remember { mutableStateOf(false) }
+    var selectedShipmentData: ShipmentSearchData? by remember { mutableStateOf(null) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Tableau de bord") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White,
-                    titleContentColor = Color.Black
-                ),
-                actions = {
-                    IconButton(onClick = { /* Notifications */ }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = Color.Black)
+            CommonTopAppBar(
+                title = "Accueil",
+                showBack = false,
+                onBack = {},
+                showRefresh = true,
+                onRefresh = {
+                    // Trigger data reload
+                    userEmail?.let { email ->
+                        homeViewModel.loadData(email)
+                        homeViewModel.loadUnreadCount()
                     }
                 }
             )
@@ -195,110 +110,25 @@ fun HomeScreen(navController: NavController) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Box Journée Actuelle - PREMIÈRE CARTE
-            item {
-                CurrentDayCard(
-                    userInfo = userInfo,
-                    driverInfo = driverInfo,
-                    isLoading = isLoading
-                )
-            }
-            
-            // Maintenance Alert Card
-            item {
-                val alert = maintenanceAlert
-                println("🔧 HomeScreen: About to display MaintenanceAlertCard. Alert is null: ${alert == null}")
-                if (alert != null) {
-                    println("🔧 HomeScreen: Alert details - Type: ${alert.type}, Days: ${alert.daysRemaining}, Level: ${alert.warningLevel}")
+            when (uiState) {
+                is HomeUiState.Loading -> {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
                 }
-                MaintenanceAlertCard(alert = alert)
-            }
-            
-            // Tournée du jour
-            item {
-                val currentState = todayTourState
-                when (currentState) {
-                    is TodayTourState.Loading -> {
+                is HomeUiState.Error -> {
+                    val message = (uiState as HomeUiState.Error).message
+                    item {
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Text("Chargement de la tournée...")
-                            }
-                        }
-                    }
-                    is TodayTourState.Success -> {
-                        TodayTourCard(
-                            tourInfo = currentState.tourInfo,
-                            statistics = currentState.statistics,
-                            navController = navController,
-                            onStartTour = {
-                                // Naviguer vers l'écran de démarrage de tournée
-                                navController.navigate("tournee")
-                            },
-                            onViewDetails = {
-                                // Naviguer vers les détails de la tournée
-                                navController.navigate("tournee")
-                            },
-                            onCompleteShipment = {
-                                // Marquer une livraison comme complétée
-                                // TODO: Implémenter la logique de complétion de livraison
-                                println("Marquer livraison comme complétée")
-                            }
-                        )
-                    }
-                    is TodayTourState.NoTour -> {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalShipping,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = Color(0xFF1976D2)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Aucune tournée prévue",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
-                                )
-                                Text(
-                                    text = "Aucune livraison n'est prévue pour aujourd'hui",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                        }
-                    }
-                    is TodayTourState.Error -> {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color(0xFFFFEBEE)
-                            )
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
                         ) {
                             Column(
                                 modifier = Modifier
@@ -309,65 +139,168 @@ fun HomeScreen(navController: NavController) {
                                 Icon(
                                     imageVector = Icons.Default.Error,
                                     contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = Color(0xFFD32F2F)
+                                    tint = Color(0xFFD32F2F),
+                                    modifier = Modifier.size(48.dp)
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = "Erreur de chargement",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleLarge,
                                     color = Color(0xFFD32F2F)
                                 )
                                 Text(
-                                    text = currentState.message,
-                                    fontSize = 14.sp,
+                                    text = message,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = Color(0xFFB71C1C)
                                 )
                             }
                         }
                     }
                 }
-            }
-            
-            // Vehicle Maintenance Section
-            if (vehicleMaintenance.isNotEmpty()) {
-                item {
-                    VehicleMaintenanceSection(maintenance = vehicleMaintenance)
-                }
-            }
-            
-            // Actions Rapides - DERNIÈRE CARTE
-            item {
-                QuickActionsCard(
-                    onManualEntry = {
-                        showManualEntryDialog = true
+                is HomeUiState.Success -> {
+                    val data = uiState as HomeUiState.Success
+            // Trigger loading of today tour when driver info is available
+// Removed inline LaunchedEffect; driver ID loading moved to top-level
+                    // Current Day Card
+                    item {
+                        CurrentDayCard(
+                            userInfo = data.userInfo,
+                            driverInfo = data.driverInfo,
+                            isLoading = false
+                        )
                     }
-                )
+                    // Maintenance Alert Card
+                    item {
+                        MaintenanceAlertCard(alert = data.maintenanceAlert)
+                    }
+                    // Today Tour Card (uses todayTourState)
+                    item {
+                        when (val state = todayTourState) {
+                            is TodayTourState.Loading -> {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Text("Chargement de la tournée…")
+                                    }
+                                }
+                            }
+                            is TodayTourState.Success -> {
+                                TodayTourCard(
+                                    tourInfo = state.tourInfo,
+                                    statistics = state.statistics,
+                                    navController = navController,
+                                    onStartTour = { navController.navigate("tournee") },
+                                    onViewDetails = { navController.navigate("tournee") },
+                                    onCompleteShipment = { /* TODO */ }
+                                )
+                            }
+                            is TodayTourState.NoTour -> {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocalShipping,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = Color(0xFF1976D2)
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "Aucune tournée prévue",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Black
+                                        )
+                                        Text(
+                                            text = "Aucune livraison n'est prévue pour aujourd'hui",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                            }
+                            is TodayTourState.Error -> {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Error,
+                                            contentDescription = null,
+                                            tint = Color(0xFFD32F2F),
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "Erreur de chargement",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFD32F2F)
+                                        )
+                                        Text(
+                                            text = state.message,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color(0xFFB71C1C)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Vehicle Maintenance Section
+                    if (data.vehicleMaintenance.isNotEmpty()) {
+                        item {
+                            VehicleMaintenanceSection(maintenance = data.vehicleMaintenance)
+                        }
+                    }
+                    // Quick Actions Card
+                    item {
+                        QuickActionsCard(onManualEntry = { showManualEntryDialog = true })
+                    }
+                }
             }
         }
     }
-    
-        
-    // Gérer les résultats de recherche
+
+    // Shipment search handling
     LaunchedEffect(shipmentSearchState) {
-        val currentState = shipmentSearchState
-        when (currentState) {
+        when (val current = shipmentSearchState) {
             is ShipmentSearchState.Success -> {
-                selectedShipmentData = currentState.data
+                selectedShipmentData = current.data
                 showShipmentDetail = true
                 showManualEntryDialog = false
             }
             is ShipmentSearchState.Error -> {
-                // Afficher un message d'erreur (TODO: Snackbar)
-                println("Erreur recherche: ${currentState.message}")
+                coroutineScope.launch { snackbarHostState.showSnackbar(current.message) }
                 showManualEntryDialog = false
             }
             else -> {}
         }
     }
-    
-    // Dialog d'entrée manuelle
+
     if (showManualEntryDialog) {
         ManualEntryDialog(
             isVisible = showManualEntryDialog,
@@ -375,14 +308,11 @@ fun HomeScreen(navController: NavController) {
                 showManualEntryDialog = false
                 shipmentSearchViewModel.clearSearchState()
             },
-            onSearch = { barcode ->
-                shipmentSearchViewModel.searchManually(barcode)
-            },
+            onSearch = { barcode -> shipmentSearchViewModel.searchManually(barcode) },
             isLoading = shipmentSearchState is ShipmentSearchState.Loading
         )
     }
-    
-    // Écran de détails du colis
+
     if (showShipmentDetail && selectedShipmentData != null) {
         ShipmentDetailScreen(
             shipmentData = selectedShipmentData!!,
@@ -396,10 +326,7 @@ fun HomeScreen(navController: NavController) {
                     shipmentSearchViewModel.markAsDelivered(data.shipment.id)
                 }
             },
-            onNavigate = {
-                // TODO: Implémenter la navigation vers GPS
-                println("Navigation vers l'adresse - TODO: GPS")
-            },
+            onNavigate = { /* TODO: GPS navigation */ },
             navController = navController
         )
     }

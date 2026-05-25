@@ -10,6 +10,8 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 
 private val DarkColorScheme = darkColorScheme(
     primary = Primary,
@@ -80,6 +82,12 @@ fun DeliveryTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        // Uniform rounded corners (8dp) for all components
+        shapes = androidx.compose.material3.Shapes(
+            small = RoundedCornerShape(8.dp),
+            medium = RoundedCornerShape(8.dp),
+            large = RoundedCornerShape(8.dp)
+        ),
         content = content
     )
 }

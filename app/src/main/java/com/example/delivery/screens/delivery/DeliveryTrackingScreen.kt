@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.delivery
+package com.example.delivery.screens.delivery
 
 import com.example.delivery.repository.Result
 
@@ -606,194 +606,35 @@ fun DeliveryTrackingScreen(
 
 
 
-            TopAppBar(
-
-
-
-                title = { Text("Suivi de mes Tournées") },
-
-
-
-                navigationIcon = {
-
-
-
-                    IconButton(onClick = onBackPressed) {
-
-
-
-                        Icon(
-
-
-
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-
-
-
-                            contentDescription = "Retour"
-
-
-
-                        )
-
-
-
-                    }
-
-
-
-                },
-
-
-
+            CommonTopAppBar(
+                title = "Suivi de mes Tournées",
+                showBack = true,
+                onBack = onBackPressed,
+                showRefresh = true,
+                onRefresh = { viewModel.refresh(driverId) },
                 actions = {
-
-
-
                     IconButton(
-
-
-
                         onClick = {
-
-
-
                             when (val state = tripState) {
-
-
-
                                 is TripWithDeliveriesState.Success -> {
-
-
-
                                     openTomTomMapsWithAllDeliveries(state.data.deliveries)
-
-
-
                                 }
-
-
-
                                 else -> {
-
-
-
                                     android.widget.Toast.makeText(
-
-
-
                                         context,
-
-
-
                                         "Chargement des livraisons en cours...",
-
-
-
                                         android.widget.Toast.LENGTH_SHORT
-
-
-
                                     ).show()
-
-
-
                                 }
-
-
-
                             }
-
-
-
                         }
-
-
-
                     ) {
-
-
-
                         Icon(
-
-
-
                             imageVector = Icons.Default.Map,
-
-
-
                             contentDescription = "Voir carte TomTom"
-
-
-
                         )
-
-
-
                     }
-
-
-
-                    IconButton(
-
-
-
-                        onClick = {
-
-
-
-                            scope.launch {
-
-
-
-                                viewModel.refresh(driverId)
-
-
-
-                            }
-
-
-
-                        },
-
-
-
-                        enabled = !isRefreshing
-
-
-
-                    ) {
-
-
-
-                        Icon(
-
-
-
-                            imageVector = Icons.Default.Refresh,
-
-
-
-                            contentDescription = "Actualiser",
-
-
-
-                            modifier = if (isRefreshing) Modifier.size(20.dp) else Modifier.size(24.dp)
-
-
-
-                        )
-
-
-
-                    }
-
-
-
                 }
-
-
-
             )
 
 

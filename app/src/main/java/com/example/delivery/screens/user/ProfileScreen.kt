@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.user
+package com.example.delivery.screens.user
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.components.VehicleMaintenanceSection
+import com.example.delivery.components.CommonTopAppBar
 import com.example.delivery.navigation.Screen
 import com.example.delivery.auth.AuthManager
 import com.example.delivery.models.user.UserResponse
@@ -40,79 +41,38 @@ import com.example.delivery.repository.user.DirectUserRepository
 import com.example.delivery.repository.vehicle.DirectVehicleRepository
 import com.example.delivery.ui.theme.FineWhiteDeliveryTheme
 import com.example.delivery.ui.theme.FineWhiteThemeExtensions
+import com.example.delivery.viewmodel.user.ProfileViewModel
+import com.example.delivery.viewmodel.user.ProfileUiState
 import android.widget.Toast
 import kotlinx.coroutines.launch
 import kotlin.Result
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(navController: NavController) {
+fun ProfileScreen(
+    navController: NavController,
+    viewModel: ProfileViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+) {
     val context = LocalContext.current
     val authManager = remember { AuthManager(context) }
     val userEmail = remember { authManager.getUserEmail() }
-    val coroutineScope = rememberCoroutineScope()
     
-    // États pour le profil
-    var profileResponse by remember { mutableStateOf<ProfileResponse?>(null) }
-    var driverStats by remember { mutableStateOf<DriverStatsSummary?>(null) }
-    var vehicleMaintenance by remember { mutableStateOf<List<VehicleMaintenance>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val uiState by viewModel.uiState.collectAsState()
     var isEditing by remember { mutableStateOf(false) }
-    
-    // Repositories directes Neon SQL
-    val directUserRepo = remember { DirectUserRepository() }
-    val directProfileRepo = remember { DirectProfileRepository() }
-    val directVehicleRepo = remember { DirectVehicleRepository() }
-    
-    // Récupérer les informations de l'utilisateur pour obtenir le driverId
-    var userInfo by remember { mutableStateOf<UserResponse?>(null) }
+    var updateErrorMessage by remember { mutableStateOf<String?>(null) }
     
     LaunchedEffect(userEmail) {
         userEmail?.let { email ->
-            isLoading = true
-            errorMessage = null
-            coroutineScope.launch {
-                try {
-                    // Récupérer les infos utilisateur avec DirectUserRepository
-                    val userResult = directUserRepo.getUserByEmail(email)
-                    if (userResult.isSuccess) {
-                        userInfo = userResult.getOrNull()
-                        userInfo?.driverId?.let { driverId: String ->
-                            // Charger le profil complet (contient déjà véhicule et dépôt)
-                            loadDriverProfile(directProfileRepo, driverId, { response: ProfileResponse ->
-                                profileResponse = response
-                            }, { error: String -> errorMessage = error })
-                            
-                            // Charger les statistiques
-                            loadDriverStats(directProfileRepo, driverId, { stats: DriverStatsSummary ->
-                                driverStats = stats
-                            }, { error: String -> errorMessage = error })
-                        }
-                    } else {
-                        errorMessage = "Erreur utilisateur: ${userResult.exceptionOrNull()?.message}"
-                    }
-                } catch (e: Exception) {
-                    errorMessage = "Erreur lors du chargement: ${e.message}"
-                } finally {
-                    isLoading = false
-                }
-            }
+            viewModel.loadProfileData(email)
         }
     }
     
-    // Plus besoin de charger les informations supplémentaires séparément
-    // Elles sont déjà incluses dans la réponse du profil
-    
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Profil") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                },
+            CommonTopAppBar(
+                title = "Profil",
+                showBack = true,
+                onBack = { navController.popBackStack() },
                 actions = {
                     IconButton(
                         onClick = {
@@ -129,133 +89,134 @@ fun ProfileScreen(navController: NavController) {
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
-        // Charger les données de maintenance du véhicule en utilisant driverId comme HomeScreen via DirectVehicleRepository
-        LaunchedEffect(userInfo) {
-            userInfo?.driverId?.let { driverId ->
-                println("🔧 ProfileScreen: Loading vehicle for driver ID: $driverId")
-                directVehicleRepo.getVehicleByDriverId(driverId)
-                    .onSuccess { vehicle ->
-                        println("🔧 ProfileScreen: Vehicle loaded: ${vehicle?.id}")
-                        vehicle?.id?.let { vehicleId ->
-                            println("🔧 ProfileScreen: Loading maintenance for vehicle ID: $vehicleId")
-                            directVehicleRepo.getVehicleMaintenance(vehicleId)
-                                .onSuccess { maintenance ->
-                                    println("🔧 ProfileScreen: Maintenance loaded successfully: ${maintenance.size} items")
-                                    vehicleMaintenance = maintenance
-                                }
-                                .onFailure { error ->
-                                    println("🔧 ProfileScreen: Error loading maintenance: ${error.message}")
-                                }
-                        } ?: run {
-                            println("🔧 ProfileScreen: No vehicle ID found")
-                        }
-                    }
-                    .onFailure { error ->
-                        println("🔧 ProfileScreen: Error loading vehicle: ${error.message}")
-                    }
-            }
-        }
-        
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Loading indicator
-            if (isLoading) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+        when (val state = uiState) {
+            is ProfileUiState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
                 }
             }
-            
-            // Error message
-            errorMessage?.let { error ->
-                item {
+            is ProfileUiState.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
                         )
                     ) {
                         Text(
-                            text = error,
+                            text = state.message,
                             modifier = Modifier.padding(16.dp),
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
                 }
             }
-            
-            // Profile Header Card
-            profileResponse?.let { response ->
-                item {
-                    ProfileHeaderCard(
-                        profile = response.profile,
-                        userEmail = userEmail,
-                        isEditing = isEditing,
-                        onProfileUpdate = { updatedProfile: DriverProfile ->
-                            coroutineScope.launch {
-                                updateDriverProfile(directProfileRepo, response.profile.id.toString(), updatedProfile, { success: Boolean ->
-                                    if (success) {
-                                        Toast.makeText(context, "Profil mis à jour", Toast.LENGTH_SHORT).show()
-                                        isEditing = false
-                                    }
-                                }, { error: String ->
-                                    errorMessage = error
-                                })
+            is ProfileUiState.Success -> {
+                val profileResponse = state.profile
+                val driverStats = state.stats
+                val vehicleMaintenance = state.maintenance
+                
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Update Error message if any
+                    updateErrorMessage?.let { error ->
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Text(
+                                    text = error,
+                                    modifier = Modifier.padding(16.dp),
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
                             }
                         }
-                    )
-                }
-            }
-            
-            // Vehicle Information Card
-            profileResponse?.vehicle?.let { vehicle ->
-                item {
-                    VehicleInfoCard(vehicle = vehicle)
-                }
-            }
-            
-                        
-            // Depot Information Card
-            profileResponse?.depot?.let { depot ->
-                item {
-                    DepotInfoCard(depot = depot)
-                }
-            }
-            
-            // Statistics Card
-            driverStats?.let { stats ->
-                item {
-                    DriverStatsCard(stats = stats)
-                }
-            }
-            
-            // Action Buttons
-            item {
-                ProfileActionsCard(
-                    onLogout = {
-                        authManager.logout(
-                            onSuccess = {
-                                Toast.makeText(context, "Déconnexion réussie", Toast.LENGTH_SHORT).show()
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(0) { inclusive = true }
+                    }
+                    
+                    // Profile Header Card
+                    profileResponse?.let { response ->
+                        item {
+                            ProfileHeaderCard(
+                                profile = response.profile,
+                                userEmail = userEmail,
+                                isEditing = isEditing,
+                                onProfileUpdate = { updatedProfile: DriverProfile ->
+                                    viewModel.updateProfile(
+                                        response.profile.id.toString(),
+                                        updatedProfile
+                                    ) { success, error ->
+                                        if (success) {
+                                            Toast.makeText(context, "Profil mis à jour", Toast.LENGTH_SHORT).show()
+                                            isEditing = false
+                                            updateErrorMessage = null
+                                            // Reload data to reflect changes
+                                            userEmail?.let { email -> viewModel.loadProfileData(email) }
+                                        } else {
+                                            updateErrorMessage = error
+                                        }
+                                    }
                                 }
-                            },
-                            onFailure = { error ->
-                                Toast.makeText(context, "Erreur: ${error.message}", Toast.LENGTH_LONG).show()
+                            )
+                        }
+                    }
+                    
+                    // Vehicle Information Card
+                    profileResponse?.vehicle?.let { vehicle ->
+                        item {
+                            VehicleInfoCard(vehicle = vehicle)
+                        }
+                    }
+                    
+                    // Depot Information Card
+                    profileResponse?.depot?.let { depot ->
+                        item {
+                            DepotInfoCard(depot = depot)
+                        }
+                    }
+                    
+                    // Statistics Card
+                    driverStats?.let { stats ->
+                        item {
+                            DriverStatsCard(stats = stats)
+                        }
+                    }
+                    
+                    // Action Buttons
+                    item {
+                        ProfileActionsCard(
+                            onLogout = {
+                                authManager.logout(
+                                    onSuccess = {
+                                        Toast.makeText(context, "Déconnexion réussie", Toast.LENGTH_SHORT).show()
+                                        navController.navigate(Screen.Login.route) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    },
+                                    onFailure = { error ->
+                                        Toast.makeText(context, "Erreur: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                )
                             }
                         )
                     }
-                )
+                }
             }
         }
     }

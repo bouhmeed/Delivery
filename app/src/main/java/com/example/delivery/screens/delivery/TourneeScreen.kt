@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.delivery
+package com.example.delivery.screens.delivery
 
 import com.example.delivery.repository.Result
 
@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.components.TripSearchBar
+import com.example.delivery.components.CommonTopAppBar
 import com.example.delivery.navigation.Screen
 import com.example.delivery.network.config.ApiClient
 import com.example.delivery.network.api.driver.TripApiService
@@ -231,32 +232,12 @@ fun TourneeScreen(navController: NavController) {
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.LocalShipping,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text("Ma Tournee", fontWeight = FontWeight.Bold)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigate(Screen.Home.route) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showStats = !showStats }) {
-                        Icon(
-                            Icons.Default.BarChart,
-                            contentDescription = "Statistiques",
-                            tint = if (showStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
+            CommonTopAppBar(
+                title = "Ma Tournée",
+                showBack = true,
+                onBack = { navController.navigate(Screen.Home.route) },
+                showRefresh = true,
+                onRefresh = { refreshTrips() }
             )
         },
         bottomBar = { BottomNavigationBar(navController) }

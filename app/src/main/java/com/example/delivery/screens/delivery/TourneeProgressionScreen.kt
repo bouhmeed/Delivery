@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.delivery
+package com.example.delivery.screens.delivery
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,7 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.delivery.components.*
+import com.example.delivery.components.common.*
 import com.example.delivery.auth.AuthManager
 import com.example.delivery.network.api.user.UserApiService
 import com.example.delivery.network.config.ApiClient
@@ -127,7 +127,7 @@ fun TourneeProgressionScreen(
         
         is ProgressionUiState.Success -> {
             ProgressSection(
-                progress = currentState.tripWithProgress.progress
+                progress = currentState.tripWithProgress.progress.percentage
             )
             
             Spacer(modifier = Modifier.height(12.dp))

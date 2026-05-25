@@ -124,11 +124,11 @@ object DesignSystem {
     
     object Components {
         // Card
-        val CARD_CORNER_RADIUS = Sizes.CORNER_RADIUS_MEDIUM
+        val CARD_CORNER_RADIUS = Sizes.CORNER_RADIUS_SMALL
         val CARD_ELEVATION = Sizes.ELEVATION_SMALL
         
         // Button
-        val BUTTON_CORNER_RADIUS = Sizes.CORNER_RADIUS_MEDIUM
+        val BUTTON_CORNER_RADIUS = Sizes.CORNER_RADIUS_SMALL
         val BUTTON_ELEVATION = Sizes.ELEVATION_SMALL
         val BUTTON_ELEVATION_PRESSED = Sizes.ELEVATION_MEDIUM
         

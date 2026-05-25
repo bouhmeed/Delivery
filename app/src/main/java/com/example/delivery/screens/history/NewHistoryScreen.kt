@@ -1,4 +1,4 @@
-﻿package com.example.delivery.screens.history
+package com.example.delivery.screens.history
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
@@ -30,7 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
+import com.example.delivery.components.CommonTopAppBar
 import com.example.delivery.navigation.Screen
+import com.example.delivery.viewmodel.history.HistoryViewModel
+import com.example.delivery.viewmodel.history.HistoryUiState
 import com.example.delivery.auth.AuthManager
 import com.example.delivery.models.user.UserResponse
 import com.example.delivery.models.TripHistory
@@ -48,11 +51,15 @@ import java.net.UnknownHostException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewHistoryScreen(navController: NavController) {
+fun NewHistoryScreen(
+    navController: NavController,
+    viewModel: HistoryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+) {
     val context = LocalContext.current
     val authManager = remember { AuthManager(context) }
     val userEmail = remember { authManager.getUserEmail() }
-    val coroutineScope = rememberCoroutineScope()
+    
+    val uiState by viewModel.uiState.collectAsState()
     
     // États pour l'historique avec filtres améliorés
     var selectedPeriod by remember { mutableStateOf("Toutes les livraisons passées") }
@@ -113,214 +120,162 @@ fun NewHistoryScreen(navController: NavController) {
         "Période personnalisée"
     )
     
-    // États pour les données
-    var driverHistory by remember { mutableStateOf<TripHistory?>(null) }
-    var driverStats by remember { mutableStateOf<DriverStats?>(null) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    
-    // Services direct Neon DB
-    val directHistoryRepo = remember { DirectHistoryRepository() }
-    val directUserRepo = remember { DirectUserRepository() }
-    
-    // Récupérer les informations de l'utilisateur pour obtenir le driverId
-    var userInfo by remember { mutableStateOf<com.example.delivery.models.user.UserResponse?>(null) }
-    
     LaunchedEffect(userEmail) {
         userEmail?.let { email ->
-            isLoading = true
-            coroutineScope.launch {
-                try {
-                    // Récupérer les infos utilisateur directement
-                    val userResult = directUserRepo.getUserByEmail(email)
-                    
-                    if (userResult.isSuccess) {
-                        userInfo = userResult.getOrNull()
-                        userInfo?.driverId?.let { driverId ->
-                            // Charger l'historique et les stats
-                            loadDriverHistory(directHistoryRepo, driverId, { history ->
-                                driverHistory = history
-                            }, { error -> errorMessage = error })
-                            
-                            loadDriverStats(directHistoryRepo, driverId, { stats ->
-                                driverStats = stats
-                            }, { error -> errorMessage = error })
-                        }
-                    } else {
-                        errorMessage = "Erreur utilisateur: ${userResult.exceptionOrNull()?.message}"
-                    }
-                } catch (e: Exception) {
-                    errorMessage = "Erreur lors du chargement: ${e.message}"
-                } finally {
-                    isLoading = false
-                }
-            }
+            viewModel.loadHistoryData(email)
         }
     }
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Historique") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            userEmail?.let { email ->
-                                userInfo?.driverId?.let { driverId ->
-                                    coroutineScope.launch {
-                                        isLoading = true
-                                        errorMessage = null
-                                        
-                                        loadDriverHistory(directHistoryRepo, driverId, { history ->
-                                            driverHistory = history
-                                        }, { error -> errorMessage = error })
-                                        
-                                        loadDriverStats(directHistoryRepo, driverId, { stats ->
-                                            driverStats = stats
-                                        }, { error -> errorMessage = error })
-                                        
-                                        isLoading = false
-                                    }
-                                }
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Actualiser")
+            CommonTopAppBar(
+                title = "Historique",
+                showBack = true,
+                onBack = { navController.popBackStack() },
+                showRefresh = true,
+                onRefresh = {
+                    userEmail?.let { email ->
+                        viewModel.loadHistoryData(email)
                     }
                 }
             )
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Stats Summary
-            driverStats?.let { stats ->
-                item {
-                    DriverStatsCard(stats = stats.stats)
+        when (val state = uiState) {
+            is HistoryUiState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
                 }
             }
-            
-            // Search and filters
-            item {
-                SearchAndFilters(
-                    searchQuery = searchQuery,
-                    onSearchChange = { searchQuery = it },
-                    selectedPeriod = selectedPeriod,
-                    onPeriodChange = { selectedPeriod = it },
-                    periodOptions = periodOptions,
-                    customStartDate = customStartDate,
-                    customEndDate = customEndDate,
-                    onCustomStartDateChange = { customStartDate = it },
-                    onCustomEndDateChange = { customEndDate = it },
-                    showStartDatePicker = showStartDatePicker,
-                    showEndDatePicker = showEndDatePicker,
-                    onShowStartDatePickerChange = { showStartDatePicker = it },
-                    onShowEndDatePickerChange = { showEndDatePicker = it }
-                )
-            }
-            
-            // Loading indicator
-            if (isLoading) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-            }
-            
-            // Error message
-            errorMessage?.let { error ->
-                item {
+            is HistoryUiState.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
                         )
                     ) {
                         Text(
-                            text = error,
+                            text = state.message,
                             modifier = Modifier.padding(16.dp),
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
                 }
             }
-            
-            // History list
-            driverHistory?.history?.let { history ->
-                // Filter history based on search query
-                val searchFilteredHistory = if (searchQuery.isBlank()) {
-                    history
-                } else {
-                    val query = searchQuery.lowercase()
-                    history.filter { delivery ->
-                        delivery.shipmentNumber?.lowercase()?.contains(query) == true ||
-                        delivery.clientName?.lowercase()?.contains(query) == true ||
-                        delivery.originName?.lowercase()?.contains(query) == true ||
-                        delivery.destinationName?.lowercase()?.contains(query) == true ||
-                        delivery.tripNumber?.lowercase()?.contains(query) == true
+            is HistoryUiState.Success -> {
+                val driverHistory = state.history
+                val driverStats = state.stats
+                val userInfo = state.userInfo
+                
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Stats Summary
+                    driverStats?.let { stats ->
+                        item {
+                            DriverStatsCard(stats = stats.stats)
+                        }
                     }
-                }
-
-                // Filter history based on selected period
-                val periodFilteredHistory = filterByPeriod(searchFilteredHistory, selectedPeriod, customStartDate, customEndDate)
-
-                if (periodFilteredHistory.isEmpty()) {
+                    
+                    // Search and filters
                     item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Aucun résultat pour \"$searchQuery\"",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                        SearchAndFilters(
+                            searchQuery = searchQuery,
+                            onSearchChange = { searchQuery = it },
+                            selectedPeriod = selectedPeriod,
+                            onPeriodChange = { selectedPeriod = it },
+                            periodOptions = periodOptions,
+                            customStartDate = customStartDate,
+                            customEndDate = customEndDate,
+                            onCustomStartDateChange = { customStartDate = it },
+                            onCustomEndDateChange = { customEndDate = it },
+                            showStartDatePicker = showStartDatePicker,
+                            showEndDatePicker = showEndDatePicker,
+                            onShowStartDatePickerChange = { showStartDatePicker = it },
+                            onShowEndDatePickerChange = { showEndDatePicker = it }
+                        )
+                    }
+                    
+                    // History list
+                    driverHistory?.history?.let { history ->
+                        // Filter history based on search query
+                        val searchFilteredHistory = if (searchQuery.isBlank()) {
+                            history
+                        } else {
+                            val query = searchQuery.lowercase()
+                            history.filter { delivery ->
+                                delivery.shipmentNumber?.lowercase()?.contains(query) == true ||
+                                delivery.clientName?.lowercase()?.contains(query) == true ||
+                                delivery.originName?.lowercase()?.contains(query) == true ||
+                                delivery.destinationName?.lowercase()?.contains(query) == true ||
+                                delivery.tripNumber?.lowercase()?.contains(query) == true
+                            }
+                        }
+
+                        // Filter history based on selected period
+                        val periodFilteredHistory = filterByPeriod(searchFilteredHistory, selectedPeriod, customStartDate, customEndDate)
+
+                        if (periodFilteredHistory.isEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Search,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "Aucun résultat pour \"$searchQuery\"",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            items(
+                                items = periodFilteredHistory,
+                                key = { it.shipmentId }
+                            ) { delivery ->
+                                DeliveryHistoryCard(
+                                    delivery = delivery,
+                                    onClick = {
+                                        // Navigate to delivery details
+                                        userInfo?.driverId?.let { driverId ->
+                                            val shipmentIdInt = delivery.shipmentId.toIntOrNull() ?: 0
+                                            val driverIdInt = driverId.toIntOrNull() ?: 0
+                                            navController.navigate(Screen.ShipmentDetail.createRoute(shipmentIdInt, driverIdInt))
+                                        }
+                                    }
                                 )
                             }
                         }
-                    }
-                } else {
-                    items(
-                        items = periodFilteredHistory,
-                        key = { it.shipmentId }
-                    ) { delivery ->
-                        DeliveryHistoryCard(
-                            delivery = delivery,
-                            onClick = {
-                                // Navigate to delivery details
-                                userInfo?.driverId?.let { driverId ->
-                                    val shipmentIdInt = delivery.shipmentId.toIntOrNull() ?: 0
-                                    val driverIdInt = driverId.toIntOrNull() ?: 0
-                                    navController.navigate(Screen.ShipmentDetail.createRoute(shipmentIdInt, driverIdInt))
-                                }
-                            }
-                        )
                     }
                 }
             }

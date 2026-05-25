@@ -1,4 +1,4 @@
-﻿package com.example.delivery
+package com.example.delivery
 
 import android.os.Bundle
 import android.util.Log
