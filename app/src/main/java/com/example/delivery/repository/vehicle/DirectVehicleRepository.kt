@@ -1,4 +1,4 @@
-﻿package com.example.delivery.repository.vehicle
+package com.example.delivery.repository.vehicle
 
  
 import com.example.delivery.models.vehicle.Vehicle
@@ -177,31 +177,44 @@ class DirectVehicleRepository {
      */
     fun calculateMaintenanceAlert(maintenance: List<VehicleMaintenance>): MaintenanceAlert? {
         if (maintenance.isEmpty()) return null
- 
-        val latest = maintenance.first()
-        val nextDate = latest.nextMaintenance
- 
-        if (nextDate == null) return null
- 
-        // Handle "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DDTHH:MM:SS" by extracting just the date
-        val datePart = nextDate.substringBefore(" ").substringBefore("T")
-        val nextMaintenanceDate = LocalDate.parse(datePart)
+
         val today = LocalDate.now()
-        val daysRemaining = ChronoUnit.DAYS.between(today, nextMaintenanceDate).toInt()
- 
+
+        // Build a list of future (or today) maintenance entries with parsed dates
+        val futureEntries = maintenance.mapNotNull { entry ->
+            val next = entry.nextMaintenance ?: return@mapNotNull null
+            // Extract date part (handles "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DDTHH:MM:SS")
+            val datePart = next.substringBefore(" ").substringBefore("T")
+            try {
+                val date = LocalDate.parse(datePart)
+                val daysRemaining = ChronoUnit.DAYS.between(today, date).toInt()
+                if (daysRemaining >= 0) {
+                    Pair(entry, daysRemaining)
+                } else null
+            } catch (e: Exception) {
+                null // Skip unparsable dates
+            }
+        }
+
+        if (futureEntries.isEmpty()) return null
+
+        // Choose the entry with the smallest daysRemaining (nearest upcoming)
+        val (selectedEntry, daysRemaining) = futureEntries.minByOrNull { it.second }!!
+        val nextDate = selectedEntry.nextMaintenance!!
+
         val warningLevel = when {
             daysRemaining <= 7 -> com.example.delivery.models.vehicle.WarningLevel.URGENT
             daysRemaining <= 30 -> com.example.delivery.models.vehicle.WarningLevel.WARNING
             else -> com.example.delivery.models.vehicle.WarningLevel.NORMAL
         }
- 
+
         return MaintenanceAlert(
-            type = latest.type,
+            type = selectedEntry.type,
             nextDate = nextDate,
             daysRemaining = daysRemaining,
             warningLevel = warningLevel,
-            vehicleName = "", // Will need to be set by caller
-            registration = "" // Will need to be set by caller
+            vehicleName = "", // Caller will set actual vehicle name
+            registration = "" // Caller will set actual registration
         )
     }
 }

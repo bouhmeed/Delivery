@@ -476,59 +476,17 @@ fun DeliveryTrackingScreen(
         }
     }
 
-
-
-    
-
-
-
     val snackbarHostState = remember { SnackbarHostState() }
 
 
-
-    
-
-
-
-    // Load data on first composition and when date changes
-
-
-
     LaunchedEffect(driverId, selectedDate) {
-
-
-
         viewModel.loadTripForDate(driverId, selectedDate)
-
-
-
         viewModel.loadShipmentDates(driverId)
-
-
-
     }
 
-
-
-    
-
-
-
-    // Handle operation state changes
-
-
-
     LaunchedEffect(operationState) {
-
-
-
         when (val state = operationState) {
-
-
-
             is OperationState.Success -> {
-
-
 
                 scope.launch {
 
