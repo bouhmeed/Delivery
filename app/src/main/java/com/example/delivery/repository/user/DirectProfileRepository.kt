@@ -38,6 +38,8 @@ class DirectProfileRepository {
             val profile = DriverProfile(
                 id = dJson.getInt("id"),
                 name = dJson.getString("name"),
+                firstName = null,
+                lastName = null,
                 licenseNumber = getNullableString(dJson, "licenseNumber"),
                 licenseExpiry = getNullableString(dJson, "licenseExpiry"),
                 employmentType = dJson.optString("employmentType", "FULL_TIME"),
@@ -200,5 +202,43 @@ class DirectProfileRepository {
         if (json.isNull(key)) return null
         val value = json.optString(key, null as String?)
         return if (value == "null") null else value
+    }
+
+    suspend fun updateDriverProfile(driverId: Int, profile: DriverProfile): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            // Combine firstName and lastName into name for database
+            val fullName = if (!profile.firstName.isNullOrBlank() && !profile.lastName.isNullOrBlank()) {
+                "${profile.firstName} ${profile.lastName}"
+            } else if (!profile.firstName.isNullOrBlank()) {
+                profile.firstName
+            } else if (!profile.lastName.isNullOrBlank()) {
+                profile.lastName
+            } else {
+                profile.name
+            }
+            
+            Log.d(TAG, "🔄 updateDriverProfile: driverId=$driverId, name=$fullName, phone=${profile.phone}, email=${profile.email}, address=${profile.address}")
+            
+            val updateQuery = """
+                UPDATE "Driver" 
+                SET 
+                    name = '${fullName}',
+                    phone = ${if (profile.phone != null) "'${profile.phone}'" else "phone"},
+                    email = ${if (profile.email != null) "'${profile.email}'" else "email"},
+                    address = ${if (profile.address != null) "'${profile.address}'" else "address"},
+                    "updatedAt" = CURRENT_TIMESTAMP
+                WHERE id = $driverId
+            """.trimIndent()
+            
+            Log.d(TAG, "📝 SQL Query: $updateQuery")
+            
+            val result = DatabaseManager.executeQuery(updateQuery)
+            Log.d(TAG, "✅ Update result: $result")
+            
+            Result.success(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error in updateDriverProfile", e)
+            Result.failure(e)
+        }
     }
 }

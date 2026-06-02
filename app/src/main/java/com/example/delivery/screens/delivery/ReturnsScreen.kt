@@ -9,6 +9,7 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -41,8 +42,8 @@ import com.example.delivery.models.driver.*
 import com.example.delivery.models.user.*
 import com.example.delivery.models.vehicle.*
 import com.example.delivery.ui.DesignSystem
-import com.example.delivery.network.config.ApiClient
 import com.example.delivery.network.api.delivery.DeliveryProofRequest
+import com.example.delivery.database.DatabaseManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,35 +78,78 @@ fun ReturnsScreen(
     var expandedArticleDropdown by remember { mutableStateOf(false) }
     var availableArticles by remember { mutableStateOf(sampleArticles) }
     var isLoadingArticles by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val directValidationRepo = remember { com.example.delivery.repository.delivery.DirectDeliveryValidationRepository() }
+    val shipmentDetailRepo = remember { com.example.delivery.repository.delivery.DirectShipmentDetailRepository() }
+    var loadedShipmentNo by remember { mutableStateOf(shipmentNo) }
+
+    // Load actual shipment Details to retrieve the real shipmentNo
+    LaunchedEffect(shipmentId) {
+        if (shipmentId > 0) {
+            try {
+                shipmentDetailRepo.getShipmentDetails(shipmentId).collect { result ->
+                    if (result is com.example.delivery.repository.Result.Success) {
+                        val shipment = result.data
+                        if (!shipment.shipmentNo.isNullOrEmpty()) {
+                            loadedShipmentNo = shipment.shipmentNo
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ DEBUG: Error loading shipment details in ReturnsScreen: ${e.message}")
+            }
+        }
+    }
     
-    // Load articles from API
+    // Load articles from PostgreSQL via DatabaseManager (SQL direct)
     LaunchedEffect(Unit) {
         isLoadingArticles = true
         try {
-            val apiService = com.example.delivery.network.config.ApiClient.getRetrofit().create(com.example.delivery.network.api.ItemApiService::class.java)
-            val response = apiService.getItems()
-            if (response.isSuccessful && response.body()?.success == true) {
-                val items = response.body()?.data ?: emptyList()
-                availableArticles = items.map { item ->
-                    Article(
-                        id = item.id.toString(),
-                        name = item.description,
-                        description = item.itemNo
+            val query = """
+                SELECT id, "itemNo", description, unit, weight, volume, category, "isActive"
+                FROM "Item"
+                WHERE "isActive" = true
+                ORDER BY description ASC
+            """.trimIndent()
+            
+            val result = DatabaseManager.executeQuery(query)
+            val jsonArray = org.json.JSONObject(result).optJSONArray("rows")
+            
+            if (jsonArray != null && jsonArray.length() > 0) {
+                val items = mutableListOf<Article>()
+                for (i in 0 until jsonArray.length()) {
+                    val itemRow = jsonArray.getJSONObject(i)
+                    items.add(
+                        Article(
+                            id = itemRow.optString("id"),
+                            name = itemRow.optString("description"),
+                            description = itemRow.optString("itemNo")
+                        )
                     )
                 }
+                availableArticles = items
                 if (availableArticles.isNotEmpty()) {
                     selectedArticle = availableArticles.first()
                 }
-                println("🔍 DEBUG: Loaded ${availableArticles.size} articles from API")
+                println("🔍 DEBUG: Loaded ${availableArticles.size} articles from PostgreSQL (Item table)")
+            } else {
+                println("⚠️ DEBUG: No articles found in Item table, using sample articles")
+                availableArticles = sampleArticles
+                if (availableArticles.isNotEmpty()) {
+                    selectedArticle = availableArticles.first()
+                }
             }
         } catch (e: Exception) {
-            println("🔍 DEBUG: Error loading articles: ${e.message}")
-            // Keep sample articles as fallback
+            println("❌ DEBUG: Error loading articles from PostgreSQL: ${e.message}")
+            println("🔄 DEBUG: Falling back to sample articles")
+            availableArticles = sampleArticles
+            if (availableArticles.isNotEmpty()) {
+                selectedArticle = availableArticles.first()
+            }
         } finally {
             isLoadingArticles = false
         }
@@ -132,6 +176,26 @@ fun ReturnsScreen(
             val inputStream = context.contentResolver.openInputStream(it)
             val bitmap = BitmapFactory.decodeStream(inputStream)
             capturedBitmap = bitmap
+        }
+    }
+    
+    // Camera permission launcher
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Permission granted, launch camera
+            val uri = createReturnsCacheImageUri(context)
+            capturedImageUri = uri
+            context.grantUriPermission(
+                context.packageName,
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            cameraLauncher.launch(uri)
+        } else {
+            // Permission denied, show dialog
+            showPermissionDialog = true
         }
     }
     
@@ -172,7 +236,7 @@ fun ReturnsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Expédition #$shipmentNo",
+                        text = "Expédition #$loadedShipmentNo",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -250,14 +314,25 @@ fun ReturnsScreen(
                     ) {
                         Button(
                             onClick = {
-                                val uri = createReturnsCacheImageUri(context)
-                                capturedImageUri = uri
-                                context.grantUriPermission(
-                                    context.packageName,
-                                    uri,
-                                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                                )
-                                cameraLauncher.launch(uri)
+                                // Check camera permission first
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        android.Manifest.permission.CAMERA
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    // Permission already granted, launch camera
+                                    val uri = createReturnsCacheImageUri(context)
+                                    capturedImageUri = uri
+                                    context.grantUriPermission(
+                                        context.packageName,
+                                        uri,
+                                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                    )
+                                    cameraLauncher.launch(uri)
+                                } else {
+                                    // Request permission
+                                    cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                }
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
@@ -512,7 +587,8 @@ fun ReturnsScreen(
                         onClick = {
                             if (defectQuantity.isNotBlank() && defectReason.isNotBlank()) {
                                 defects = defects + ItemDefect(
-                                    article = selectedArticle.name,
+                                    itemId = selectedArticle.id.toIntOrNull() ?: 0,
+                                    articleName = selectedArticle.name,
                                     quantity = defectQuantity.toIntOrNull() ?: 0,
                                     reason = defectReason
                                 )
@@ -544,7 +620,7 @@ fun ReturnsScreen(
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "${defect.article} x${defect.quantity}",
+                                            text = "${defect.articleName} x${defect.quantity}",
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
@@ -603,7 +679,31 @@ fun ReturnsScreen(
                             
                             when (result) {
                                 is com.example.delivery.repository.Result.Success -> {
-                                    snackbarHostState.showSnackbar("Retours soumis avec succès!")
+                                    val shipmentReturnId = result.data
+                                    println("✅ Returns saved with ID: $shipmentReturnId")
+                                    
+                                    // Save defects if any
+                                    if (defects.isNotEmpty()) {
+                                        val defectsResult = directValidationRepo.saveReturnDefects(
+                                            shipmentReturnId = shipmentReturnId,
+                                            defects = defects
+                                        )
+                                        
+                                        when (defectsResult) {
+                                            is com.example.delivery.repository.Result.Success -> {
+                                                println("✅ Defects saved successfully")
+                                                snackbarHostState.showSnackbar("Retours et défauts soumis avec succès!")
+                                            }
+                                            is com.example.delivery.repository.Result.Error -> {
+                                                println("⚠️ Defects save failed: ${defectsResult.message}")
+                                                snackbarHostState.showSnackbar("Retours soumis (défauts non sauvegardés)")
+                                            }
+                                            else -> {}
+                                        }
+                                    } else {
+                                        snackbarHostState.showSnackbar("Retours soumis avec succès!")
+                                    }
+                                    
                                     kotlinx.coroutines.delay(1000)
                                     navController.navigateUp()
                                 }
@@ -639,6 +739,37 @@ fun ReturnsScreen(
                 }
             }
         }
+    }
+    
+    // Permission dialog
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text("Permission caméra requise") },
+            text = { Text("La permission caméra est nécessaire pour prendre des photos de preuve. Veuillez l'accorder dans les paramètres.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionDialog = false
+                        // Open app settings
+                        val intent = android.content.Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.fromParts("package", context.packageName, null)
+                        )
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text("Paramètres")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showPermissionDialog = false }
+                ) {
+                    Text("Annuler")
+                }
+            }
+        )
     }
 }
 

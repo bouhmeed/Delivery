@@ -13,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -85,11 +86,10 @@ fun DeliveryItemCard(
 
     var expandedStatus by remember { mutableStateOf(false) }
 
-    // Status options: Shipment.status values (TO_PLAN, EXPEDITION, DELIVERED)
-
+    // Status options: Shipment.status values (EXPEDITION, DELIVERED) - TO_PLAN hidden from UI
     // UI shows French labels but sends DB values directly
 
-    val statusOptions = listOf("TO_PLAN", "EXPEDITION", "DELIVERED")
+    val statusOptions = listOf("EXPEDITION", "DELIVERED")
 
     var selectedStatus by remember { mutableStateOf(
 
@@ -231,9 +231,9 @@ fun DeliveryItemCard(
 
                 elevation = if (isPressed) 8.dp else 4.dp,
 
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(24.dp),
 
-                spotColor = statusColor.copy(alpha = 0.3f)
+                spotColor = Color(0xFF102A43).copy(alpha = 0.1f)
 
             )
 
@@ -253,7 +253,7 @@ fun DeliveryItemCard(
 
             },
 
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
 
         colors = CardDefaults.cardColors(
 
@@ -265,9 +265,9 @@ fun DeliveryItemCard(
 
         border = BorderStroke(
 
-            width = if (isPressed) 2.dp else 1.dp,
+            width = 1.dp,
 
-            color = statusColor.copy(alpha = if (isPressed) 0.8f else 0.3f)
+            color = Color(0xFFE2E8F0)
 
         )
 
@@ -279,11 +279,11 @@ fun DeliveryItemCard(
 
                 .fillMaxWidth()
 
-                .padding(20.dp)
+                .padding(24.dp)
 
         ) {
 
-            // Header with sequence number and status
+            // Header with shipment number and premium status badge
 
             Row(
 
@@ -295,151 +295,338 @@ fun DeliveryItemCard(
 
             ) {
 
-                // Sequence number with enhanced design
+                // Shipment number in deep navy bold
 
-                Box(
+                Column {
 
-                    modifier = Modifier
+                    Text(
 
-                        .size(40.dp)
+                        text = "N°${delivery.shipmentNo}",
 
-                        .shadow(
+                        style = MaterialTheme.typography.titleLarge,
 
-                            elevation = 4.dp,
+                        fontWeight = FontWeight.Bold,
 
-                            shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF102A43)
 
-                            spotColor = statusColor.copy(alpha = 0.4f)
+                    )
+
+                    // Origin address subdued in medium-gray
+
+                    if (delivery.originAddress != null) {
+
+                        Text(
+
+                            text = "Origine: ${delivery.originCity ?: "Ville inconnue"}",
+
+                            style = MaterialTheme.typography.bodySmall,
+
+                            color = Color(0xFF64748B),
+
+                            fontWeight = FontWeight.Medium
 
                         )
 
-                        .background(
+                    }
 
-                            statusColor,
+                }
 
-                            RoundedCornerShape(12.dp)
+                
 
-                        ),
+                // Premium pill badge with pastel background
 
-                    contentAlignment = Alignment.Center
+                val (badgeBg, badgeText) = when (delivery.status) {
 
+                    "TO_PLAN" -> Color(0xFFFFF7E0) to Color(0xFFB06000)
+
+                    "EXPEDITION" -> Color(0xFFE8F0FE) to Color(0xFF1A73E8)
+
+                    "DELIVERED" -> Color(0xFFE6F4EA) to Color(0xFF137333)
+
+                    else -> Color(0xFFF1F3F4) to Color(0xFF5F6368)
+
+                }
+
+                Surface(
+
+                    shape = CircleShape,
+                    color = badgeBg,
+                    border = BorderStroke(1.dp, badgeText.copy(alpha = 0.3f))
                 ) {
 
                     Text(
 
-                        text = delivery.sequence.toString(),
+                        text = when (delivery.status) {
 
-                        style = MaterialTheme.typography.titleMedium,
+                            "DELIVERED" -> "Livrée"
+
+                            "EXPEDITION" -> "En cours"
+
+                            "TO_PLAN" -> "À planifier"
+
+                            else -> delivery.status
+
+                        },
+
+                        style = MaterialTheme.typography.labelMedium,
 
                         fontWeight = FontWeight.Bold,
 
-                        color = Color.White
+                        color = badgeText,
+
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
 
                     )
 
                 }
 
-                // Enhanced status badge
+            }
 
-                Surface(
+            Spacer(modifier = Modifier.height(16.dp))
 
-                    modifier = Modifier
+            // Destination address in prominent deep navy bold
 
-                        .shadow(
+            Column {
 
-                            elevation = 2.dp,
+                Text(
 
-                            shape = RoundedCornerShape(20.dp),
+                    text = delivery.fullAddress ?: delivery.deliveryAddress ?: "Adresse non spécifiée",
 
-                            spotColor = statusColor.copy(alpha = 0.3f)
+                    style = MaterialTheme.typography.titleMedium,
 
-                        ),
+                    fontWeight = FontWeight.Bold,
 
-                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF102A43),
 
-                    color = statusColor.copy(alpha = 0.1f),
+                    maxLines = 2,
 
-                    border = BorderStroke(
+                    overflow = TextOverflow.Ellipsis
 
-                        width = 1.dp,
+                )
 
-                        color = statusColor.copy(alpha = 0.5f)
+                Spacer(modifier = Modifier.height(4.dp))
 
-                    )
+                Text(
 
-                ) {
+                    text = "${delivery.deliveryCity ?: "Ville inconnue"} ${delivery.deliveryZipCode ?: "00000"}",
 
-                    Column(
+                    style = MaterialTheme.typography.bodyMedium,
 
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = Color(0xFF64748B),
 
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    fontWeight = FontWeight.Medium
+
+                )
+
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Client name and type info
+
+            Row(
+
+                modifier = Modifier.fillMaxWidth(),
+
+                horizontalArrangement = Arrangement.SpaceBetween,
+
+                verticalAlignment = Alignment.CenterVertically
+
+            ) {
+
+                Text(
+
+                    text = delivery.clientName ?: "Client non spécifié",
+
+                    style = MaterialTheme.typography.bodyLarge,
+
+                    fontWeight = FontWeight.Bold,
+
+                    color = Color(0xFF102A43)
+
+                )
+
+                // Type badge
+
+                delivery.type?.let { type ->
+
+                    val (typeLabel, typeColor) = when (type) {
+
+                        "OUTBOUND" -> "Sortant" to Color(0xFF4CAF50)
+
+                        "INBOUND" -> "Entrante" to Color(0xFF2196F3)
+
+                        "TRANSFER" -> "Transfert" to Color(0xFFFF9800)
+
+                        else -> type to Color(0xFF9E9E9E)
+
+                    }
+
+                    Surface(
+
+                        shape = RoundedCornerShape(12.dp),
+
+                        color = typeColor.copy(alpha = 0.15f),
+
+                        border = BorderStroke(
+
+                            width = 1.dp,
+
+                            color = typeColor.copy(alpha = 0.5f)
+
+                        )
+
+                    ) {
+
+                        Text(
+
+                            text = typeLabel,
+
+                            style = MaterialTheme.typography.labelMedium,
+
+                            color = typeColor,
+
+                            fontWeight = FontWeight.Bold,
+
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+
+                        )
+
+                    }
+
+                }
+
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Distance and duration info
+
+            Row(
+
+                modifier = Modifier.fillMaxWidth(),
+
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+
+            ) {
+
+                val distanceToShow = depotDistance ?: delivery.distanceKm
+
+                distanceToShow?.let { distance ->
+
+                    Surface(
+
+                        shape = RoundedCornerShape(12.dp),
+
+                        color = Color(0xFFF1F5F9),
+
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
 
                     ) {
 
                         Row(
 
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+
                             verticalAlignment = Alignment.CenterVertically,
 
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
 
                         ) {
 
-                            Box(
+                            Icon(
 
-                                modifier = Modifier
+                                imageVector = Icons.Default.DirectionsCar,
 
-                                    .size(8.dp)
+                                contentDescription = "Distance",
 
-                                    .background(
+                                tint = Color(0xFF102A43),
 
-                                        statusColor,
-
-                                        RoundedCornerShape(4.dp)
-
-                                    )
+                                modifier = Modifier.size(16.dp)
 
                             )
 
-                            // Status display with French translation from Shipment.status
+                            if (isCalculatingDistance) {
+
+                                CircularProgressIndicator(
+
+                                    modifier = Modifier.size(16.dp),
+
+                                    strokeWidth = 2.dp,
+
+                                    color = Color(0xFF1976D2)
+
+                                )
+
+                            } else {
+
+                                Text(
+
+                                    text = "${distance.toInt()} km",
+
+                                    style = MaterialTheme.typography.bodyMedium,
+
+                                    color = Color(0xFF102A43),
+
+                                    fontWeight = FontWeight.Bold
+
+                                )
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+                delivery.estimatedDuration?.let { duration ->
+
+                    Surface(
+
+                        shape = RoundedCornerShape(12.dp),
+
+                        color = Color(0xFFF1F5F9),
+
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+
+                    ) {
+
+                        Row(
+
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+
+                            verticalAlignment = Alignment.CenterVertically,
+
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+
+                        ) {
+
+                            Icon(
+
+                                imageVector = Icons.Default.Schedule,
+
+                                contentDescription = "Durée",
+
+                                tint = Color(0xFF102A43),
+
+                                modifier = Modifier.size(16.dp)
+
+                            )
 
                             Text(
 
-                                text = when (delivery.status) {
+                                text = "${duration} min",
 
-                                    "DELIVERED" -> "Livrée"
+                                style = MaterialTheme.typography.bodyMedium,
 
-                                    "EXPEDITION" -> "En expédition"
+                                color = Color(0xFF102A43),
 
-                                    "TO_PLAN" -> "À planifier"
-
-                                    else -> delivery.status
-
-                                },
-
-                                style = MaterialTheme.typography.labelMedium,
-
-                                fontWeight = FontWeight.SemiBold,
-
-                                color = statusColor
+                                fontWeight = FontWeight.Bold
 
                             )
 
                         }
-
-                        // Raw TripShipmentLink.status (DB value)
-
-                        Text(
-
-                            text = delivery.status,
-
-                            style = MaterialTheme.typography.labelSmall,
-
-                            fontWeight = FontWeight.Medium,
-
-                            color = statusColor.copy(alpha = 0.8f)
-
-                        )
 
                     }
 
@@ -449,375 +636,7 @@ fun DeliveryItemCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Client name with enhanced typography
-
-            Column {
-
-                Text(
-
-                    text = delivery.clientName ?: "Client non spécifié",
-
-                    style = MaterialTheme.typography.titleLarge,
-
-                    fontWeight = FontWeight.Bold,
-
-                    color = Color(0xFF1A1A1A)
-
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Shipment number and type
-
-                Row(
-
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-
-                    verticalAlignment = Alignment.CenterVertically
-
-                ) {
-
-                    Text(
-
-                        text = "N°${delivery.shipmentNo}",
-
-                        style = MaterialTheme.typography.bodyMedium,
-
-                        color = Color(0xFF666666),
-
-                        fontWeight = FontWeight.Medium
-
-                    )
-
-                    // Type badge
-
-                    delivery.type?.let { type ->
-
-                        val (typeLabel, typeColor) = when (type) {
-
-                            "OUTBOUND" -> "Sortante" to Color(0xFF4CAF50)
-
-                            "INBOUND" -> "Entrante" to Color(0xFF2196F3)
-
-                            "TRANSFER" -> "Transfert" to Color(0xFFFF9800)
-
-                            else -> type to Color(0xFF9E9E9E)
-
-                        }
-
-                        Surface(
-
-                            shape = RoundedCornerShape(6.dp),
-
-                            color = typeColor.copy(alpha = 0.15f),
-
-                            border = BorderStroke(
-
-                                width = 1.dp,
-
-                                color = typeColor.copy(alpha = 0.5f)
-
-                            )
-
-                        ) {
-
-                            Text(
-
-                                text = typeLabel,
-
-                                style = MaterialTheme.typography.labelSmall,
-
-                                color = typeColor,
-
-                                fontWeight = FontWeight.SemiBold,
-
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-
-                            )
-
-                        }
-
-                    }
-
-                }
-
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Address with enhanced design
-
-            Surface(
-
-                modifier = Modifier.fillMaxWidth(),
-
-                shape = RoundedCornerShape(12.dp),
-
-                color = Color(0xFFF8F9FA),
-
-                border = BorderStroke(
-
-                    width = 1.dp,
-
-                    color = Color(0xFFE9ECEF)
-
-                )
-
-            ) {
-
-                Row(
-
-                    modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .padding(12.dp),
-
-                    verticalAlignment = Alignment.CenterVertically,
-
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-
-                ) {
-
-                    Icon(
-
-                        imageVector = Icons.Default.LocationOn,
-
-                        contentDescription = "Adresse",
-
-                        tint = statusColor,
-
-                        modifier = Modifier.size(20.dp)
-
-                    )
-
-                    Column(
-
-                        modifier = Modifier.weight(1f)
-
-                    ) {
-
-                        Text(
-
-                            text = delivery.fullAddress ?: "Adresse non spécifiée",
-
-                            style = MaterialTheme.typography.bodyMedium,
-
-                            color = Color(0xFF333333),
-
-                            fontWeight = FontWeight.Medium,
-
-                            maxLines = 2,
-
-                            overflow = TextOverflow.Ellipsis
-
-                        )
-
-                        Text(
-
-                            text = "${delivery.locationCity ?: "Ville inconnue"} ${delivery.locationPostalCode ?: "00000"}",
-
-                            style = MaterialTheme.typography.bodySmall,
-
-                            color = Color(0xFF666666)
-
-                        )
-
-                    }
-
-                }
-
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Enhanced delivery info
-
-            Row(
-
-                modifier = Modifier.fillMaxWidth(),
-
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-
-            ) {
-
-                // Distance and duration
-
-                Row(
-
-                    verticalAlignment = Alignment.CenterVertically,
-
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-
-                ) {
-
-                    // Afficher la distance de l'origine si disponible, sinon la distance existante
-
-                    val distanceToShow = depotDistance ?: delivery.distanceKm
-
-                    distanceToShow?.let { distance ->
-
-                        val distanceLabel = if (depotDistance != null) "Origine: ${distance.toInt()} km" else "${distance.toInt()} km"
-
-                        Surface(
-
-                            shape = RoundedCornerShape(8.dp),
-
-                            color = if (depotDistance != null) Color(0xFFE3F2FD) else Color(0xFFF0F0F0),
-
-                            border = BorderStroke(
-
-                                width = 1.dp,
-
-                                color = if (depotDistance != null) Color(0xFF2196F3) else Color(0xFFE0E0E0)
-
-                            )
-
-                        ) {
-
-                            Row(
-
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-
-                                verticalAlignment = Alignment.CenterVertically,
-
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-
-                            ) {
-
-                                Icon(
-
-                                    imageVector = if (depotDistance != null) Icons.Default.LocationOn else Icons.Default.DirectionsCar,
-
-                                    contentDescription = "Distance",
-
-                                    tint = if (depotDistance != null) Color(0xFF2196F3) else Color(0xFF666666),
-
-                                    modifier = Modifier.size(16.dp)
-
-                                )
-
-                                if (isCalculatingDistance) {
-
-                                    CircularProgressIndicator(
-
-                                        modifier = Modifier.size(16.dp),
-
-                                        strokeWidth = 2.dp,
-
-                                        color = Color(0xFF2196F3)
-
-                                    )
-
-                                } else {
-
-                                    Text(
-
-                                        text = distanceLabel,
-
-                                        style = MaterialTheme.typography.bodySmall,
-
-                                        color = if (depotDistance != null) Color(0xFF1976D2) else Color(0xFF666666),
-
-                                        fontWeight = FontWeight.Medium
-
-                                    )
-
-                                }
-
-                            }
-
-                        }
-
-                    }
-
-                    delivery.estimatedDuration?.let { duration ->
-
-                        Surface(
-
-                            shape = RoundedCornerShape(8.dp),
-
-                            color = Color(0xFFF0F0F0),
-
-                            border = BorderStroke(
-
-                                width = 1.dp,
-
-                                color = Color(0xFFE0E0E0)
-
-                            )
-
-                        ) {
-
-                            Row(
-
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-
-                                verticalAlignment = Alignment.CenterVertically,
-
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-
-                            ) {
-
-                                Icon(
-
-                                    imageVector = Icons.Default.Schedule,
-
-                                    contentDescription = "Durée",
-
-                                    tint = Color(0xFF666666),
-
-                                    modifier = Modifier.size(16.dp)
-
-                                )
-
-                                Text(
-
-                                    text = "${duration} min",
-
-                                    style = MaterialTheme.typography.bodySmall,
-
-                                    color = Color(0xFF666666),
-
-                                    fontWeight = FontWeight.Medium
-
-                                )
-
-                            }
-
-                        }
-
-                    }
-
-                }
-
-                // Quantity and type
-
-                Column(
-
-                    horizontalAlignment = Alignment.End
-
-                ) {
-
-                    Text(
-
-                        text = "${delivery.quantity} ${delivery.uom}",
-
-                        style = MaterialTheme.typography.bodySmall,
-
-                        color = Color(0xFF666666),
-
-                        fontWeight = FontWeight.Medium
-
-                    )
-
-                }
-
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Liste déroulante de statuts
+            // Status dropdown with premium design
 
             ExposedDropdownMenuBox(
 
@@ -893,7 +712,17 @@ fun DeliveryItemCard(
 
                             enabled = !isUpdatingStatus
 
-                        )
+                        ),
+
+                    shape = RoundedCornerShape(12.dp),
+
+                    colors = OutlinedTextFieldDefaults.colors(
+
+                        focusedBorderColor = Color(0xFF1976D2),
+
+                        unfocusedBorderColor = Color(0xFFE2E8F0)
+
+                    )
 
                 )
 
@@ -969,15 +798,11 @@ fun DeliveryItemCard(
 
                                     println("🔄 Changement de statut: ${delivery.shipmentNo} -> $status")
 
-                                    // Appeler le callback pour mettre à jour le statut
-
                                     onStatusChange(delivery, status)
-
-                                    // Simuler la fin de la mise à jour (sera géré par le ViewModel)
 
                                     scope.launch {
 
-                                        delay(2000) // Timeout de sécurité
+                                        delay(2000)
 
                                         isUpdatingStatus = false
 
@@ -997,315 +822,169 @@ fun DeliveryItemCard(
 
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Action buttons with enhanced design and consistent sizing
+            // Action Dock - Text buttons with icons for better readability
 
-            Column(
+            Row(
 
                 modifier = Modifier.fillMaxWidth(),
 
-                verticalArrangement = Arrangement.spacedBy(DesignSystem.Sizes.SPACING_MEDIUM)
+                horizontalArrangement = Arrangement.SpaceBetween,
+
+                verticalAlignment = Alignment.CenterVertically
 
             ) {
 
-                // Première rangée: Itinéraire, Validation, Terminer
+                // Call - Soft green text button
 
-                Row(
+                delivery.clientPhone?.let {
 
-                    modifier = Modifier.fillMaxWidth(),
+                    TextButton(
 
-                    horizontalArrangement = Arrangement.spacedBy(DesignSystem.Sizes.SPACING_SMALL)
+                        onClick = {
 
+                            println("� Appel client!")
+
+                            onCallClick(delivery)
+
+                        },
+
+                        modifier = Modifier.weight(1f),
+
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = Color(0xFF4CAF50)
+                        )
+                    ) {
+
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Appeler",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        Text(
+                            text = "Appeler",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                }
+
+                // Navigation - Primary brand blue text button
+
+                TextButton(
+
+                    onClick = {
+
+                        println("�️ Navigation TomTom!")
+
+                        openTomTomWebNavigation(context, delivery)
+
+                    },
+
+                    modifier = Modifier.weight(1f),
+
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFF1976D2)
+                    )
                 ) {
 
-                    // Navigate button - Web navigation with TomTom
+                    Icon(
+                        imageVector = Icons.Default.Navigation,
+                        contentDescription = "Naviguer",
+                        tint = Color(0xFF1976D2),
+                        modifier = Modifier.size(18.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        text = "Naviguer",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Validation - Prominent button with solid emerald background (only if DELIVERED)
+
+                if (selectedStatus == "DELIVERED") {
 
                     Button(
 
                         onClick = {
 
-                            println("🗺️ Bouton Itinéraire cliqué - Navigation web TomTom!")
+                            println("✅ Validation!")
 
-                            openTomTomWebNavigation(context, delivery)
+                            onValidationClick(delivery)
 
                         },
 
-                        modifier = Modifier
-
-                            .weight(0.9f)
-
-                            .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
-
-                        shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
+                        modifier = Modifier.weight(1f),
 
                         colors = ButtonDefaults.buttonColors(
-
-                            containerColor = DesignSystem.Colors.NAVIGATION_GREEN,
-
-                            contentColor = DesignSystem.Colors.SURFACE_WHITE
-
+                            containerColor = Color(0xFF10B981),
+                            contentColor = Color.White
                         ),
-
-                        elevation = ButtonDefaults.buttonElevation(
-
-                            defaultElevation = 6.dp,
-
-                            pressedElevation = 8.dp
-
-                        ),
-
-                        border = BorderStroke(
-
-                            width = 1.dp,
-
-                            color = DesignSystem.Colors.SURFACE_WHITE.copy(alpha = 0.3f)
-
-                        )
-
-                    ) {
-
-                        Row(
-
-                            modifier = Modifier.padding(horizontal = DesignSystem.Sizes.SPACING_MINI),
-
-                            horizontalArrangement = Arrangement.Center,
-
-                            verticalAlignment = Alignment.CenterVertically
-
-                        ) {
-
-                            Icon(
-
-                                imageVector = Icons.Default.Navigation,
-
-                                contentDescription = "Navigation",
-
-                                modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
-
-                            )
-
-                            Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_MINI))
-
-                            Text(
-
-                                text = "Itinéraire",
-
-                                style = MaterialTheme.typography.labelMedium,
-
-                                fontWeight = FontWeight.Bold
-
-                            )
-
-                        }
-
-                    }
-
-                    // Validation button - Primary blue (uniquement si "DELIVERED" est sélectionné)
-
-                    println("🔍 DEBUG: selectedStatus = '$selectedStatus', podDone = ${delivery.podDone}")
-
-                    if (selectedStatus == "DELIVERED") {
-
-                        Button(
-
-                            onClick = { 
-
-                                println("✅ Bouton Validation cliqué!")
-
-                                onValidationClick(delivery)
-
-                            },
-
-                            modifier = Modifier
-
-                                .weight(1.2f)  // Plus d'espace pour le texte plus long
-
-                                .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
-
-                            shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
-
-                            colors = ButtonDefaults.buttonColors(
-
-                                containerColor = DesignSystem.Colors.VALIDATION_BLUE,
-
-                                contentColor = DesignSystem.Colors.SURFACE_WHITE
-
-                            ),
-
-                            elevation = ButtonDefaults.buttonElevation(
-
-                                defaultElevation = DesignSystem.Components.BUTTON_ELEVATION,
-
-                                pressedElevation = DesignSystem.Components.BUTTON_ELEVATION_PRESSED
-
-                            )
-
-                        ) {
-
-                            Icon(
-
-                                imageVector = Icons.Default.Verified,
-
-                                contentDescription = "Validation",
-
-                                modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
-
-                            )
-
-                            Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_MINI))
-
-                            Text(
-
-                                text = "Validation",
-
-                                style = MaterialTheme.typography.labelMedium,
-
-                                fontWeight = FontWeight.SemiBold
-
-                            )
-
-                        }
-
-                    }
-
-                    // Complete button - Success green with disabled state
-
-                    Button(
-
-                        onClick = { onCompleteClick(delivery) },
-
-                        modifier = Modifier
-
-                            .weight(0.9f)  // Moins d'espace, texte plus court
-
-                            .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
-
-                        shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
-
-                        colors = ButtonDefaults.buttonColors(
-
-                            containerColor = if (delivery.podDone) DesignSystem.Colors.DISABLED_GRAY else DesignSystem.Colors.SUCCESS_GREEN,
-
-                            contentColor = DesignSystem.Colors.SURFACE_WHITE
-
-                        ),
-
-                        enabled = !delivery.podDone,
-
-                        elevation = ButtonDefaults.buttonElevation(
-
-                            defaultElevation = if (delivery.podDone) DesignSystem.Sizes.ELEVATION_NONE else DesignSystem.Components.BUTTON_ELEVATION,
-
-                            pressedElevation = if (delivery.podDone) DesignSystem.Sizes.ELEVATION_NONE else DesignSystem.Components.BUTTON_ELEVATION_PRESSED
-
-                        )
-
+                        shape = RoundedCornerShape(12.dp)
                     ) {
 
                         Icon(
-
-                            imageVector = if (delivery.podDone) Icons.Default.CheckCircle else Icons.Default.Check,
-
-                            contentDescription = "Compléter",
-
-                            modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_MEDIUM)
-
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = "Valider",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
                         )
 
-                        Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_MINI))
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         Text(
-
-                            text = if (delivery.podDone) "Terminé" else "Terminer",
-
-                            style = MaterialTheme.typography.labelMedium,
-
-                            fontWeight = FontWeight.SemiBold
-
+                            text = "Valider",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
                         )
 
                     }
 
                 }
 
-                // Deuxième rangée: Appeler (si numéro disponible) - Full width with accent color
+                // Returns - Keep as icon button for secondary action
 
-                val phoneNumber = delivery.clientPhone
+                IconButton(
 
-                if (phoneNumber != null) {
+                    onClick = {
 
-                    Button(
+                        println("📦 Retours!")
 
-                        onClick = { 
+                        onReturnsClick(delivery)
 
-                            println("Bouton Appeler cliqué!")
+                    },
 
-                            onCallClick(delivery)
+                    modifier = Modifier.size(40.dp)
 
-                        },
+                ) {
 
-                        modifier = Modifier
+                    Icon(
 
-                            .fillMaxWidth()
+                        imageVector = Icons.Default.Inventory2,
 
-                            .height(DesignSystem.Sizes.BUTTON_HEIGHT_MEDIUM),
+                        contentDescription = "Retours",
 
-                        shape = RoundedCornerShape(DesignSystem.Components.BUTTON_CORNER_RADIUS),
+                        tint = Color(0xFFFF9800),
 
-                        colors = ButtonDefaults.buttonColors(
+                        modifier = Modifier.size(20.dp)
 
-                            containerColor = DesignSystem.Colors.CALL_GREEN,
-
-                            contentColor = DesignSystem.Colors.SURFACE_WHITE
-
-                        ),
-
-                        elevation = ButtonDefaults.buttonElevation(
-
-                            defaultElevation = DesignSystem.Components.BUTTON_ELEVATION,
-
-                            pressedElevation = DesignSystem.Components.BUTTON_ELEVATION_PRESSED
-
-                        )
-
-                    ) {
-
-                        Row(
-
-                            modifier = Modifier.padding(vertical = DesignSystem.Sizes.SPACING_SMALL),
-
-                            horizontalArrangement = Arrangement.Center,
-
-                            verticalAlignment = Alignment.CenterVertically
-
-                        ) {
-
-                            Icon(
-
-                                imageVector = Icons.Default.Call,
-
-                                contentDescription = "Appeler",
-
-                                modifier = Modifier.size(DesignSystem.Sizes.ICON_SIZE_LARGE)
-
-                            )
-
-                            Spacer(modifier = Modifier.width(DesignSystem.Sizes.SPACING_SMALL))
-
-                            Text(
-
-                                text = "Appeler",
-
-                                style = MaterialTheme.typography.labelMedium,
-
-                                fontWeight = FontWeight.SemiBold
-
-                            )
-
-                        }
-
-                    }
+                    )
 
                 }
 

@@ -13,6 +13,7 @@ import androidx.compose.animation.core.*
 
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 
 
 
@@ -21,9 +22,6 @@ import androidx.compose.foundation.layout.*
 
 
 import androidx.compose.foundation.lazy.LazyColumn
-
-
-
 import androidx.compose.foundation.lazy.items
 
 
@@ -589,7 +587,8 @@ fun DeliveryTrackingScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Map,
-                            contentDescription = "Voir carte TomTom"
+                            contentDescription = "Voir carte TomTom",
+                            tint = Color(0xFF102A43)
                         )
                     }
                 }
@@ -642,33 +641,44 @@ fun DeliveryTrackingScreen(
                 )
             }
 
-            // Filter Section Card with responsive design
+            // Fast-access FilterChips row for instant filtering
             item {
-                
-                if (filteredDeliveries.isEmpty() && filterState.selectedStatuses.isEmpty() && 
-                    filterState.selectedTypes.isEmpty() && filterState.customerQuery.isBlank()) {
-                    // Show empty filter state
-                    com.example.delivery.components.EmptyFilterState(
-                        onClearFilters = { viewModel.clearFilters() }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val statusOptions = listOf("Tout", "À planifier", "En expédition", "Livrée")
+                    val statusMapping = mapOf(
+                        "Tout" to emptySet(),
+                        "À planifier" to setOf("TO_PLAN"),
+                        "En expédition" to setOf("EXPEDITION"),
+                        "Livrée" to setOf("DELIVERED")
                     )
-                } else {
-                    // Show filter card
-                    FilterSectionCard(
-                        isExpanded = filtersExpanded,
-                        onExpandedChange = { filtersExpanded = it },
-                        selectedStatuses = filterState.selectedStatuses,
-                        onStatusFilterChange = { viewModel.updateStatusFilter(it) },
-                        selectedTypes = filterState.selectedTypes,
-                        onTypeFilterChange = { viewModel.updateTypeFilter(it) },
-                        customerQuery = filterState.customerQuery,
-                        onCustomerQueryChange = { viewModel.updateCustomerQuery(it) },
-                        sortBy = filterState.sortBy,
-                        onSortByChange = { viewModel.updateSortOption(it) },
-                        sortOrder = filterState.sortOrder,
-                        onSortOrderChange = { viewModel.updateSortOrder(it) },
-                        activeFiltersCount = calculateActiveFiltersCount(filterState),
-                        onClearFilters = { viewModel.clearFilters() }
-                    )
+                    
+                    statusOptions.forEach { status ->
+                        val isSelected = when (status) {
+                            "Tout" -> filterState.selectedStatuses.isEmpty()
+                            else -> filterState.selectedStatuses == statusMapping[status]
+                        }
+                        
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                viewModel.updateStatusFilter(statusMapping[status] ?: emptySet())
+                            },
+                            label = { Text(status) },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.White,
+                                selectedContainerColor = Color(0xFF102A43),
+                                selectedLabelColor = Color.White,
+                                labelColor = Color(0xFF102A43)
+                            ),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                        )
+                    }
                 }
             }
 
@@ -797,7 +807,7 @@ fun DeliveryTrackingScreen(
 
                         // Delivery items with origin information from backend
 
-                        items(filteredDeliveries) { delivery ->
+                        items(filteredDeliveries, key = { it.shipmentId }) { delivery ->
 
                             DeliveryItemCard(
 
@@ -819,6 +829,10 @@ fun DeliveryTrackingScreen(
 
                                     viewModel.updateTripShipmentStatus(tripShipmentLinkId, newStatus, driverId)
 
+                                },
+
+                                onReturnsClick = { deliveryItem ->
+                                    navController.navigate("returns/${deliveryItem.shipmentId}")
                                 }
 
                             )

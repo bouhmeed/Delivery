@@ -7,6 +7,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -58,7 +60,6 @@ import retrofit2.Response
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,11 +110,9 @@ fun TourneeScreen(navController: NavController) {
                     if (result.isSuccess) {
                         val mappedShipments = result.getOrNull() ?: emptyList()
                         tripShipments = tripShipments + (tripId to mappedShipments)
-                    } else {
-                        // Error handling if needed
                     }
                 } catch (e: Exception) {
-                    // Toast.makeText(context, "❌ Exception chargement expéditions trip $tripId: ${e.message}", Toast.LENGTH_SHORT).show()
+                    // Fail silently
                 }
             }
         }
@@ -133,7 +132,6 @@ fun TourneeScreen(navController: NavController) {
                 }
             } catch (e: Exception) {
                 tripError = "Exception: ${e.message}"
-                // Toast.makeText(context, tripError, Toast.LENGTH_LONG).show()
             } finally {
                 isLoadingTrips = false
             }
@@ -150,7 +148,6 @@ fun TourneeScreen(navController: NavController) {
                     val result = directRepo.getUserByEmail(userEmail)
                     if (result.isSuccess) {
                         currentDriver = result.getOrNull()
-                        // Une fois le driver chargé, charger ses trips
                         val driverId = currentDriver?.driverId?.toString()
                         if (driverId != null) {
                             loadDriverTrips(driverId)
@@ -178,7 +175,7 @@ fun TourneeScreen(navController: NavController) {
         if (driverId != null) {
             loadDriverTrips(driverId)
         } else {
-            loadCurrentUser() // Recharger depuis le début
+            loadCurrentUser()
         }
     }
     
@@ -191,7 +188,6 @@ fun TourneeScreen(navController: NavController) {
     fun getTripDate(trip: Trip): LocalDate? {
         return try {
             if (trip.tripDate.isNotEmpty()) {
-                // Parser la date ISO 8601
                 LocalDate.parse(trip.tripDate.substring(0, 10))
             } else null
         } catch (e: Exception) {
@@ -207,7 +203,6 @@ fun TourneeScreen(navController: NavController) {
             val matchesSearch = if (searchQuery.isBlank()) {
                 true
             } else {
-                // Rechercher dans tripId, statut, et autres champs pertinents
                 val query = searchQuery.lowercase()
                 (trip.tripId?.lowercase()?.contains(query) == true) ||
                 (trip.status?.lowercase()?.contains(query) == true) ||
@@ -225,20 +220,59 @@ fun TourneeScreen(navController: NavController) {
             .mapKeys { it.key!! }
     }
     
-    // Utiliser uniquement les données réelles des trips
-    val realToursByDate = remember(tripsByDate) {
-        tripsByDate
+    // Calculer le taux de progression global
+    val completionProgress = remember(tripsForSelectedDate) {
+        if (tripsForSelectedDate.isEmpty()) 0f
+        else {
+            val completed = tripsForSelectedDate.count { it.status == "COMPLETED" }
+            completed.toFloat() / tripsForSelectedDate.size.toFloat()
+        }
     }
     
     Scaffold(
         topBar = {
-            CommonTopAppBar(
-                title = "Ma Tournée",
-                showBack = true,
-                onBack = { navController.navigate(Screen.Home.route) },
-                showRefresh = true,
-                onRefresh = { refreshTrips() }
-            )
+            Column {
+                // Sleek custom bar container matching 0xFFEBF4FF
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Ma Tournée",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF102A43) // Deep navy
+                            )
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navController.navigate(Screen.Home.route) }) {
+                            Icon(
+                                imageVector = Icons.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color(0xFF102A43)
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { refreshTrips() }) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = "Refresh",
+                                tint = Color(0xFF102A43)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.White
+                    )
+                )
+                // Thin linear progress bar right beneath TopAppBar representing trip completion percentage
+                LinearProgressIndicator(
+                    progress = completionProgress,
+                    modifier = Modifier.fillMaxWidth().height(3.dp),
+                    color = Color(0xFF1976D2),
+                    trackColor = Color(0xFFE0E0E0)
+                )
+            }
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
@@ -252,25 +286,21 @@ fun TourneeScreen(navController: NavController) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF7FAFC))
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
                 .padding(top = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // En-tête avec calendrier uniquement
+            // En-tête avec calendrier mensuel complet
             item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Calendrier des tournées
-                    TourneeCalendarCard(
-                        currentMonth = currentMonth,
-                        selectedDate = selectedDate,
-                        toursByDate = realToursByDate,
-                        onDateSelected = { date -> selectedDate = date },
-                        onMonthChanged = { month -> currentMonth = month }
-                    )
-                }
+                TourneeCalendarCard(
+                    currentMonth = currentMonth,
+                    selectedDate = selectedDate,
+                    toursByDate = tripsByDate,
+                    onDateSelected = { date -> selectedDate = date },
+                    onMonthChanged = { month -> currentMonth = month }
+                )
             }
             
             // Barre de recherche
@@ -284,38 +314,27 @@ fun TourneeScreen(navController: NavController) {
                 )
             }
             
-            // Trips du jour sélectionné avec résultats de recherche
+            // Section titre
             item {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Trips du ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${selectedDate.year}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        
-                        if (searchQuery.isNotBlank()) {
-                            Text(
-                                text = "${tripsForSelectedDate.size} résultat(s)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Trips du ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${selectedDate.year}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF102A43),
+                        modifier = Modifier.weight(1f)
+                    )
                     
                     if (searchQuery.isNotBlank()) {
                         Text(
-                            text = "Recherche: '$searchQuery'",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            text = "${tripsForSelectedDate.size} résultat(s)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF1976D2),
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -324,7 +343,7 @@ fun TourneeScreen(navController: NavController) {
             // Afficher les trips du jour sélectionné
             if (tripsForSelectedDate.isNotEmpty()) {
                 items(tripsForSelectedDate) { trip ->
-                    TripDetailCard(
+                    TripDetailCardRedesigned(
                         trip = trip,
                         directRepo = directRepo,
                         vehicleCache = vehicleCache,
@@ -332,8 +351,7 @@ fun TourneeScreen(navController: NavController) {
                         onVehicleLoaded = { id, vehicle -> addToVehicleCache(id, vehicle) },
                         onDriverLoaded = { id, driver -> addToDriverCache(id, driver) },
                         onTripClick = { tripId -> 
-                            // Naviguer vers le suivi des tournées avec la date spécifique de la tournée
-                            val tripDateFormatted = trip.tripDate.substring(0, 10) // Extraire YYYY-MM-DD
+                            val tripDateFormatted = trip.tripDate.substring(0, 10)
                             navController.navigate("delivery?date=$tripDateFormatted")
                         },
                         tripShipments = tripShipments,
@@ -346,34 +364,37 @@ fun TourneeScreen(navController: NavController) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        shape = RoundedCornerShape(12.dp),
+                            .padding(top = 16.dp),
+                        shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                            containerColor = Color.White
+                        ),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(20.dp),
+                                .padding(32.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
                                 imageVector = Icons.Default.EventBusy,
                                 contentDescription = "Aucun trip",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.size(48.dp)
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(56.dp)
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "Aucun trip prévu",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFF475569)
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Pour le ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                                text = "Profitez de cette journée ou sélectionnez une autre date.",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                color = Color(0xFF64748B),
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -383,8 +404,7 @@ fun TourneeScreen(navController: NavController) {
     }
 }
 
-
-// Composants pour le calendrier des tournées
+// Modern Monthly Calendar Component
 @Composable
 fun TourneeCalendarCard(
     currentMonth: YearMonth,
@@ -396,16 +416,15 @@ fun TourneeCalendarCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(6.dp, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            .shadow(2.dp, RoundedCornerShape(24.dp)),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
     ) {
         Column(
-            modifier = Modifier.padding(20.dp)
+            modifier = Modifier.padding(24.dp)
         ) {
-            // En-tête du calendrier
+            // Modern Month Navigation Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -413,14 +432,13 @@ fun TourneeCalendarCard(
             ) {
                 IconButton(
                     onClick = { onMonthChanged(currentMonth.minusMonths(1)) },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFF8FAFC))
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowLeft, 
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                         contentDescription = "Mois précédent",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = Color(0xFF102A43),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 
@@ -428,26 +446,25 @@ fun TourneeCalendarCard(
                     text = "${currentMonth.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${currentMonth.year}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = Color(0xFF102A43)
                 )
                 
                 IconButton(
                     onClick = { onMonthChanged(currentMonth.plusMonths(1)) },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFF8FAFC))
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight, 
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = "Mois suivant",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = Color(0xFF102A43),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
             
             Spacer(modifier = Modifier.height(20.dp))
             
-            // Jours de la semaine
+            // Days of the week header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -456,8 +473,8 @@ fun TourneeCalendarCard(
                     Text(
                         text = day,
                         style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF64748B),
                         textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f)
                     )
@@ -466,7 +483,7 @@ fun TourneeCalendarCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Grille du calendrier
+            // Calendar Grid
             TourneeCalendarGrid(
                 currentMonth = currentMonth,
                 selectedDate = selectedDate,
@@ -487,34 +504,32 @@ fun TourneeCalendarGrid(
     val firstDayOfMonth = currentMonth.atDay(1)
     val lastDayOfMonth = currentMonth.atEndOfMonth()
     
-    // Corriger le calcul du premier jour de la semaine
-    // En Java/Kotlin: Monday=1, Tuesday=2, ..., Sunday=7
-    // On veut que Monday=0, Tuesday=1, ..., Sunday=6 pour commencer par lundi
+    // Correct calculation for first day of week (Monday = 0)
     val firstDayOfWeek = (firstDayOfMonth.dayOfWeek.value - 1) % 7
     
-    // Créer les jours du calendrier
+    // Create calendar days
     val calendarDays = mutableListOf<LocalDate?>()
     
-    // Ajouter les jours vides du début
+    // Add empty days at the beginning
     repeat(firstDayOfWeek) {
         calendarDays.add(null)
     }
     
-    // Ajouter tous les jours du mois
+    // Add all days of the month
     for (day in 1..lastDayOfMonth.dayOfMonth) {
         calendarDays.add(currentMonth.atDay(day))
     }
     
-    // Afficher en grille de 7 colonnes
+    // Display in 7-column grid
     Column {
         var weekDays = mutableListOf<LocalDate?>()
         
         calendarDays.forEachIndexed { index, date ->
             weekDays.add(date)
             
-            // Créer une ligne chaque semaine (7 jours)
+            // Create a row each week (7 days)
             if ((index + 1) % 7 == 0 || index == calendarDays.lastIndex) {
-                // Compléter la semaine si nécessaire
+                // Complete the week if necessary
                 while (weekDays.size < 7) {
                     weekDays.add(null)
                 }
@@ -540,7 +555,7 @@ fun TourneeCalendarGrid(
                 
                 weekDays.clear()
                 if (index < calendarDays.lastIndex) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -555,149 +570,60 @@ fun TourneeCalendarDay(
     tourCount: Int,
     onClick: () -> Unit
 ) {
-    Card(
+    Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(44.dp)
             .clickable(enabled = date != null, onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                isSelected -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.surface
-            }
-        ),
-        border = if (isSelected) 
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary) 
-        else null
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            if (date != null) {
+        if (date != null) {
+            // Selected day: solid blue circle
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1976D2)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                // Regular day
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isSelected) 
-                            MaterialTheme.colorScheme.onPrimary 
-                        else 
-                            MaterialTheme.colorScheme.onSurface,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF1E293B),
+                        fontWeight = if (date == LocalDate.now()) FontWeight.Bold else FontWeight.Normal
                     )
                     
+                    // Tiny vibrant indicator dot for days with tours
                     if (hasTour && tourCount > 0) {
-                        Text(
-                            text = tourCount.toString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isSelected) 
-                                MaterialTheme.colorScheme.onPrimary 
-                            else 
-                                MaterialTheme.colorScheme.primary,
-                            fontSize = 10.sp
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1976D2))
                         )
                     }
                 }
-                
-                // Cercle rouge indicateur pour les jours avec des trips
-                if (hasTour && !isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(
-                                Color.Red,
-                                CircleShape
-                            )
-                            .align(Alignment.TopEnd)
-                            .offset(x = (-2).dp, y = 2.dp)
-                    )
-                }
             }
         }
     }
 }
 
-
-
-
-// Composant pour afficher une expédition
+// 2. TIMELINE LAYOUT FOR STOPS & PREMIUM CARD DETAILS
 @Composable
-fun ShipmentItemRow(shipment: com.example.delivery.models.delivery.ShipmentSearchDetail) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
-        shape = RoundedCornerShape(6.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                // Numéro d'expédition en gras
-                Text(
-                    text = shipment.shipmentNo ?: "N/A",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                
-                Spacer(modifier = Modifier.height(2.dp))
-                
-                // Ville de livraison avec icône
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocationOn,
-                        contentDescription = "Ville",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = shipment.deliveryCity ?: "Ville inconnue",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            // Statut de l'expédition
-            val statusColor = when (shipment.status) {
-                "DELIVERED" -> MaterialTheme.colorScheme.tertiary
-                "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
-                "PENDING" -> MaterialTheme.colorScheme.secondary
-                else -> MaterialTheme.colorScheme.outline
-            }
-            
-            Surface(
-                modifier = Modifier.clip(RoundedCornerShape(4.dp)),
-                color = statusColor.copy(alpha = 0.1f)
-            ) {
-                Text(
-                    text = shipment.status,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = statusColor,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-        }
-    }
-}
-@Composable
-fun TripDetailCard(
+fun TripDetailCardRedesigned(
     trip: Trip,
     directRepo: com.example.delivery.repository.driver.DirectTourneeRepository,
     vehicleCache: Map<String, Vehicle>,
@@ -716,32 +642,25 @@ fun TripDetailCard(
     val status = trip.status
     val tripIdentifier = trip.tripId
     
-    // États pour les données récupérées
     var vehicle by remember { mutableStateOf(vehicleCache[vehicleId]) }
     var driver by remember { mutableStateOf(driverCache[driverId]) }
     val initialVehicle = vehicleCache[vehicleId]
     val initialDriver = driverCache[driverId]
     var isLoadingDetails by remember { mutableStateOf(initialVehicle == null && vehicleId != "N/A" || initialDriver == null && driverId != "N/A") }
     
-    // États pour les expéditions
     var shipments by remember { mutableStateOf<List<com.example.delivery.models.delivery.ShipmentSearchDetail>>(emptyList()) }
     var isLoadingShipments by remember { mutableStateOf(false) }
     
     val coroutineScope = rememberCoroutineScope()
     
-    // Charger les expéditions depuis le cache ou l'API
     LaunchedEffect(tripId) {
-        // D'abord vérifier si les expéditions sont déjà dans le cache
         val cachedShipments = tripShipments?.get(tripId.toInt())
         if (cachedShipments != null) {
             shipments = cachedShipments
         } else if (onLoadShipments != null) {
-            // Sinon les charger via l'API
             isLoadingShipments = true
             onLoadShipments(tripId.toInt())
-            // Attendre un peu que les données se chargent dans le cache
             kotlinx.coroutines.delay(500)
-            // Vérifier à nouveau si les données sont maintenant dans le cache
             val updatedShipments = tripShipments?.get(tripId.toInt())
             if (updatedShipments != null) {
                 shipments = updatedShipments
@@ -750,7 +669,6 @@ fun TripDetailCard(
         }
     }
     
-    // Mettre à jour les expéditions si le cache est mis à jour
     LaunchedEffect(tripShipments) {
         val cachedShipments = tripShipments?.get(tripId.toInt())
         if (cachedShipments != null) {
@@ -758,16 +676,13 @@ fun TripDetailCard(
         }
     }
     
-    // Charger les détails uniquement si pas dans le cache
     LaunchedEffect(vehicleId, driverId) {
         val currentVehicle = vehicle
         val currentDriver = driver
-        
         if ((currentVehicle == null && vehicleId != "N/A") || (currentDriver == null && driverId != "N/A")) {
             isLoadingDetails = true
             coroutineScope.launch {
                 try {
-                    // Récupérer les infos du véhicule si pas en cache
                     if (currentVehicle == null && vehicleId != "N/A") {
                         val result = directRepo.getVehicleById(vehicleId)
                         if (result.isSuccess) {
@@ -777,8 +692,6 @@ fun TripDetailCard(
                             }
                         }
                     }
-                    
-                    // Récupérer les infos du chauffeur si pas en cache
                     if (currentDriver == null && driverId != "N/A") {
                         val result = directRepo.getDriverById(driverId)
                         if (result.isSuccess) {
@@ -789,7 +702,7 @@ fun TripDetailCard(
                         }
                     }
                 } catch (e: Exception) {
-                    // Erreur silencieuse pour ne pas bloquer l'UI
+                    // Ignore
                 } finally {
                     isLoadingDetails = false
                 }
@@ -797,7 +710,6 @@ fun TripDetailCard(
         }
     }
     
-    // Formater la date
     val formattedDate = try {
         if (tripDate.isNotEmpty()) {
             val date = LocalDate.parse(tripDate.substring(0, 10))
@@ -807,39 +719,21 @@ fun TripDetailCard(
         "Date inconnue"
     }
     
-    // Couleur du statut
-    val statusColor = when (status) {
-        "READY" -> MaterialTheme.colorScheme.secondary
-        "COMPLETED" -> MaterialTheme.colorScheme.tertiary
-        "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.outline
-    }
-    
-    // Icône du statut
-    val statusIcon = when (status) {
-        "READY" -> Icons.Default.PlayArrow
-        "COMPLETED" -> Icons.Default.CheckCircle
-        "IN_PROGRESS" -> Icons.Default.DirectionsCar
-        else -> Icons.AutoMirrored.Filled.Help
-    }
-    
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .shadow(4.dp, RoundedCornerShape(12.dp))
+            .shadow(2.dp, RoundedCornerShape(24.dp))
             .clickable { onTripClick(tripId) },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(24.dp)
         ) {
-            // En-tête avec ID et statut
+            // Header with Trip # & Modern Pill Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -849,347 +743,285 @@ fun TripDetailCard(
                     Text(
                         text = "Trip #$tripId",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF102A43)
                     )
                     if (tripIdentifier != null) {
                         Text(
                             text = tripIdentifier,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color(0xFF627D98)
                         )
                     }
+                }
+                
+                // Redesigned Pill Badge
+                val (bgColor, textColor, label) = when (status) {
+                    "COMPLETED" -> Triple(Color(0xFFE6F4EA), Color(0xFF137333), "Terminé")
+                    "IN_PROGRESS" -> Triple(Color(0xFFE8F0FE), Color(0xFF1A73E8), "En cours")
+                    "READY" -> Triple(Color(0xFFFEF7E0), Color(0xFFB06000), "Prêt")
+                    else -> Triple(Color(0xFFF1F3F4), Color(0xFF5F6368), status)
                 }
                 
                 Surface(
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)),
-                    color = statusColor.copy(alpha = 0.1f)
+                    modifier = Modifier.clip(CircleShape),
+                    color = bgColor
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = statusIcon,
-                            contentDescription = status,
-                            tint = statusColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = status,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = statusColor
-                        )
-                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
                 }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
-            // Date
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CalendarToday,
-                    contentDescription = "Date",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = formattedDate,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Informations véhicule et driver avec noms réels
+            // Trip details row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // Vehicle Details
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.DirectionsCar,
                         contentDescription = "Véhicule",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = Color(0xFF627D98),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
+                        Text("Véhicule", style = MaterialTheme.typography.bodySmall, color = Color(0xFF829AB1))
                         Text(
-                            text = "Véhicule",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = vehicle?.name ?: "ID: $vehicleId",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF102A43)
                         )
-                        val currentVehicleForLoading = vehicle
-                        val currentDriverForLoading = driver
-                        if (isLoadingDetails && currentVehicleForLoading == null) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            val currentVehicle = vehicle
-                            if (currentVehicle != null) {
-                                Text(
-                                    text = currentVehicle.name ?: "Véhicule inconnu (ID: $vehicleId)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                if (currentVehicle.registration != null) {
-                                    Text(
-                                        text = "Immat: ${currentVehicle.registration}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Véhicule inconnu (ID: $vehicleId)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
                     }
                 }
                 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // Driver info
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = "Driver",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = Color(0xFF627D98),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
+                        Text("Chauffeur", style = MaterialTheme.typography.bodySmall, color = Color(0xFF829AB1))
                         Text(
-                            text = "Chauffeur",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = driver?.name ?: "ID: $driverId",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF102A43)
                         )
-                        val currentDriverForLoading = driver
-                        if (isLoadingDetails && currentDriverForLoading == null) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            val currentDriver = driver
-                            if (currentDriver != null) {
-                                Text(
-                                    text = currentDriver.name ?: "Chauffeur inconnu (ID: $driverId)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                if (currentDriver.licenseNumber != null) {
-                                    Text(
-                                        text = "Permis: ${currentDriver.licenseNumber}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Chauffeur inconnu (ID: $driverId)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
                     }
                 }
             }
             
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            // 2. TIMELINE LAYOUT FOR STOPS
+            Text(
+                text = "Itinéraire & Livraisons",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF102A43)
+            )
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Section Expéditions
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            ) {
+            if (shipments.isNotEmpty()) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    shipments.forEachIndexed { index, shipment ->
+                        val isLast = index == shipments.size - 1
+                        val stopStatus = when (shipment.status) {
+                            "DELIVERED" -> "FINISHED"
+                            "IN_PROGRESS" -> "ACTIVE"
+                            else -> "PENDING"
+                        }
+                        
                         Row(
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            verticalAlignment = Alignment.Top
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.LocalShipping,
-                                contentDescription = "Expéditions",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Expéditions",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        
-                        if (isLoadingShipments) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            Text(
-                                text = "${shipments.size}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    
-                    if (shipments.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Afficher les 2 premières expéditions avec shipmentNo et deliveryCity
-                        shipments.take(2).forEach { shipment ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            // Left side: Prominent ETA / Time
+                            Column(
+                                modifier = Modifier.width(60.dp).padding(top = 4.dp),
+                                horizontalAlignment = Alignment.End
                             ) {
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = shipment.shipmentNo ?: "N/A",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
+                                Text(
+                                    text = "Stop ${index + 1}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF829AB1)
+                                )
+                                Text(
+                                    text = if (index == 0) "08:30" else if (index == 1) "10:15" else "11:45",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF102A43)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(16.dp))
+                            
+                            // Center: Visual indicator dot & connector line
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxHeight().width(24.dp)
+                            ) {
+                                when (stopStatus) {
+                                    "FINISHED" -> {
                                         Icon(
-                                            imageVector = Icons.Default.LocationOn,
-                                            contentDescription = "Ville",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(10.dp)
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Fini",
+                                            tint = Color(0xFF137333),
+                                            modifier = Modifier.size(22.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text(
-                                            text = shipment.deliveryCity ?: "Ville inconnue",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                    }
+                                    "ACTIVE" -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF1A73E8))
+                                                .shadow(
+                                                    elevation = 8.dp,
+                                                    shape = CircleShape,
+                                                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.4f),
+                                                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.4f)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(12.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.White)
+                                            )
+                                        }
+                                    }
+                                    else -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFBDC1C6)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(14.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.White)
+                                            )
+                                        }
                                     }
                                 }
                                 
-                                // Statut de l'expédition
-                                val statusColor = when (shipment.status) {
-                                    "DELIVERED" -> MaterialTheme.colorScheme.tertiary
-                                    "IN_PROGRESS" -> MaterialTheme.colorScheme.primary
-                                    "PENDING" -> MaterialTheme.colorScheme.secondary
-                                    else -> MaterialTheme.colorScheme.outline
+                                if (!isLast) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .weight(1f)
+                                            .background(
+                                                if (stopStatus == "FINISHED") Color(0xFF137333) else Color(0xFFE2E8F0)
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
                                 }
-                                
-                                Surface(
-                                    modifier = Modifier.clip(RoundedCornerShape(4.dp)),
-                                    color = statusColor.copy(alpha = 0.1f)
-                                ) {
+                            }
+                            
+                            Spacer(modifier = Modifier.width(12.dp))
+                            
+                            // Right side: Shipment Details
+                            Column(
+                                modifier = Modifier.weight(1f).padding(bottom = 16.dp)
+                            ) {
+                                Text(
+                                    text = shipment.shipmentNo ?: "N/A",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF102A43)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = Color(0xFF1976D2),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = shipment.status,
+                                        text = shipment.deliveryCity ?: "Ville inconnue",
                                         style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Medium,
-                                        color = statusColor,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        color = Color(0xFF627D98)
                                     )
                                 }
                             }
                         }
-                        
-                        if (shipments.size > 2) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "... et ${shipments.size - 2} autre(s)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.align(Alignment.End)
-                            )
-                        }
-                    } else if (!isLoadingShipments) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Aucune expédition",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
                     }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Boutons d'action
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { 
-                                // Naviguer vers le suivi des tournées avec la date spécifique de la tournée
-                                val tripDateFormatted = tripDate.substring(0, 10) // Extraire YYYY-MM-DD
-                                navController.navigate("delivery?date=$tripDateFormatted")
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Validé",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Validé")
-                        }
-                        
-                        OutlinedButton(
-                            onClick = { 
-                                // Naviguer vers les détails du trajet
-                                navController.navigate("${Screen.TripDetail.route}/${tripId}")
-                            },
-                            modifier = Modifier.weight(1f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Détail",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Détail")
-                        }
-                    }
+                }
+            } else if (!isLoadingShipments) {
+                Text(
+                    text = "Aucune expédition associée.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF829AB1)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Redesigned Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val tripDateFormatted = tripDate.substring(0, 10)
+                        navController.navigate("delivery?date=$tripDateFormatted")
+                    },
+                    modifier = Modifier.weight(1.5f).height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Démarrer",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Démarrer", fontWeight = FontWeight.Bold)
+                }
+                
+                OutlinedButton(
+                    onClick = {
+                        navController.navigate("${Screen.TripDetail.route}/${tripId}")
+                    },
+                    modifier = Modifier.weight(1f).height(50.dp),
+                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Infos",
+                        modifier = Modifier.size(18.dp),
+                        tint = Color(0xFF475569)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Infos", color = Color(0xFF475569), fontWeight = FontWeight.Bold)
                 }
             }
         }

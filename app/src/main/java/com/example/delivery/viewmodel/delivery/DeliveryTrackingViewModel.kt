@@ -416,6 +416,9 @@ class DeliveryTrackingViewModel : ViewModel() {
      */
     private fun applyFilters(deliveries: List<DeliveryItem>) {
         val filtered = deliveries.filter { delivery ->
+            // Hide TO_PLAN shipments from UI
+            val notToPlan = delivery.status != "TO_PLAN"
+            
             // Status filter
             val statusMatch = _filterState.value.selectedStatuses.isEmpty() || 
                 delivery.status in _filterState.value.selectedStatuses
@@ -428,7 +431,7 @@ class DeliveryTrackingViewModel : ViewModel() {
             val customerMatch = _filterState.value.customerQuery.isBlank() || 
                 (delivery.clientName?.contains(_filterState.value.customerQuery, ignoreCase = true) == true)
             
-            statusMatch && typeMatch && customerMatch
+            notToPlan && statusMatch && typeMatch && customerMatch
         }.sortedWith(compareBy<DeliveryItem> { delivery ->
             when (_filterState.value.sortBy) {
                 SortOption.DISTANCE -> delivery.distanceKm ?: Double.MAX_VALUE

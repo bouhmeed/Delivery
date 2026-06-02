@@ -2,6 +2,7 @@
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,108 +47,72 @@ fun DeliveryStatsCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White,
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 2.dp,
             pressedElevation = 4.dp
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Progress section
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "Progression du jour",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF333333)
-                )
-                
-                Text(
-                    text = "${stats.completed}/${stats.total}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF4CAF50)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Progress bar
-            Column {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${stats.completionPercentage}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF666666)
+                        text = "${stats.completed}/${stats.total}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF102A43)
                     )
                     Text(
-                        text = "${stats.completed} livraisons",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF666666)
+                        text = "livraisons",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF64748B)
                     )
                 }
                 
-                Spacer(modifier = Modifier.height(8.dp))
-                
+                // Compact linear progress bar
                 LinearProgressIndicator(
                     progress = { animatedProgress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp),
-                    color = Color(0xFF4CAF50),
-                    trackColor = Color(0xFFF0F0F0),
+                        .height(6.dp),
+                    color = Color(0xFF1976D2),
+                    trackColor = Color(0xFFF1F5F9),
                     strokeCap = StrokeCap.Round
                 )
             }
             
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             
-            // Stats grid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // Percentage badge
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFFEBF4FF),
+                border = BorderStroke(1.dp, Color(0xFF1976D2))
             ) {
-                StatItem(
-                    icon = Icons.Default.CheckCircle,
-                    label = "Terminées",
-                    value = stats.completed.toString(),
-                    iconColor = Color(0xFF4CAF50),
-                    backgroundColor = Color(0xFFE8F5E8),
-                    modifier = Modifier.weight(1f)
-                )
-                
-                StatItem(
-                    icon = Icons.Default.PlayCircle,
-                    label = "En cours",
-                    value = stats.inProgress.toString(),
-                    iconColor = Color(0xFFFF9800),
-                    backgroundColor = Color(0xFFFFF3E0),
-                    modifier = Modifier.weight(1f)
-                )
-                
-                StatItem(
-                    icon = Icons.Default.Schedule,
-                    label = "À faire",
-                    value = stats.notStarted.toString(),
-                    iconColor = Color(0xFF2196F3),
-                    backgroundColor = Color(0xFFE3F2FD),
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = "${stats.completionPercentage}%",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF102A43),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
         }

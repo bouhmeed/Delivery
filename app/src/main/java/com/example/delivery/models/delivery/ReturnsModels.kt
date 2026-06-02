@@ -30,9 +30,43 @@ data class RecoveredQuantities(
  * Item defect information
  */
 data class ItemDefect(
-    val article: String,
+    val itemId: Int,        // Foreign key to Item table
+    val articleName: String, // Display name (from Item.description)
     val quantity: Int,
     val reason: String
+)
+
+/**
+ * Shipment return model (maps to ShipmentReturns table)
+ */
+data class ShipmentReturn(
+    val id: Int? = null,
+    val shipmentId: Int,
+    val tripShipmentLinkId: Int? = null,
+    val packagesRecovered: Boolean,
+    val packagingRecovered: Boolean,
+    val palettes: Int,
+    val caisses: Int,
+    val bouteilles: Int,
+    val futs: Int,
+    val autre: Int,
+    val comment: String? = null,
+    val proofImageUrl: String? = null,
+    val tenantId: Int,
+    val createdAt: String? = null,
+    val updatedAt: String? = null
+)
+
+/**
+ * Shipment return defect model (maps to ShipmentReturnDefects table)
+ */
+data class ShipmentReturnDefect(
+    val id: Int? = null,
+    val shipmentReturnId: Int,
+    val itemId: Int,
+    val quantity: Int,
+    val reason: String,
+    val createdAt: String? = null
 )
 
 /**

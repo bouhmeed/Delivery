@@ -94,8 +94,13 @@ class ProfileViewModel : ViewModel() {
     fun updateProfile(driverId: String, updatedProfile: DriverProfile, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
             try {
-                // Simulate success
-                onResult(true, null)
+                val driverIdInt = driverId.toIntOrNull() ?: 5
+                val result = directProfileRepo.updateDriverProfile(driverIdInt, updatedProfile)
+                if (result.isSuccess) {
+                    onResult(true, null)
+                } else {
+                    onResult(false, result.exceptionOrNull()?.message)
+                }
             } catch (e: Exception) {
                 onResult(false, e.message)
             }

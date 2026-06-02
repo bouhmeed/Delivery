@@ -3,6 +3,8 @@ package com.example.delivery.models.user
 data class DriverProfile(
     val id: Int,
     val name: String,
+    val firstName: String?,
+    val lastName: String?,
     val licenseNumber: String?,
     val licenseExpiry: String?,
     val employmentType: String,

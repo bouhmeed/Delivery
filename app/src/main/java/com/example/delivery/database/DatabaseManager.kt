@@ -227,6 +227,20 @@ object DatabaseManager {
         return executeQuery(query)
     }
 
+    /**
+     * List all tables in the database
+     */
+    suspend fun listAllTables(): String {
+        Log.d(TAG, "📋 Listing all tables in database")
+        val query = """
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """.trimIndent()
+        return executeQuery(query)
+    }
+
     // --- HOME SCREEN TESTS ---
 
     suspend fun testGetUserByEmail() {
@@ -248,6 +262,17 @@ object DatabaseManager {
             Log.d(TAG, result)
         } catch (e: Exception) {
             Log.e(TAG, "Test Home 2 failed")
+        }
+    }
+
+    suspend fun testListAllTables() {
+        Log.d(TAG, "🧪 TEST: List all tables")
+        try {
+            val result = listAllTables()
+            Log.d(TAG, "📦 TABLES IN DATABASE:")
+            Log.d(TAG, result)
+        } catch (e: Exception) {
+            Log.e(TAG, "Test list tables failed: ${e.message}")
         }
     }
 

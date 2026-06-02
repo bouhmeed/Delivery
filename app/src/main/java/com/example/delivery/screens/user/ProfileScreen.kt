@@ -1,13 +1,14 @@
 package com.example.delivery.screens.user
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -24,28 +25,28 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.delivery.components.BottomNavigationBar
-import com.example.delivery.components.VehicleMaintenanceSection
-import com.example.delivery.components.CommonTopAppBar
-import com.example.delivery.navigation.Screen
+import android.widget.Toast
+import kotlinx.coroutines.launch
+import kotlin.Result
 import com.example.delivery.auth.AuthManager
-import com.example.delivery.models.user.UserResponse
-import com.example.delivery.models.user.ProfileResponse
+import com.example.delivery.components.BottomNavigationBar
+import com.example.delivery.components.CommonTopAppBar
+import com.example.delivery.components.VehicleMaintenanceSection
+import com.example.delivery.models.user.DepotInfo
 import com.example.delivery.models.user.DriverProfile
 import com.example.delivery.models.user.DriverStatsSummary
+import com.example.delivery.models.user.ProfileResponse
+import com.example.delivery.models.user.UserResponse
 import com.example.delivery.models.user.VehicleInfo
-import com.example.delivery.models.user.DepotInfo
 import com.example.delivery.models.vehicle.VehicleMaintenance
+import com.example.delivery.navigation.Screen
 import com.example.delivery.repository.user.DirectProfileRepository
 import com.example.delivery.repository.user.DirectUserRepository
 import com.example.delivery.repository.vehicle.DirectVehicleRepository
 import com.example.delivery.ui.theme.FineWhiteDeliveryTheme
 import com.example.delivery.ui.theme.FineWhiteThemeExtensions
-import com.example.delivery.viewmodel.user.ProfileViewModel
 import com.example.delivery.viewmodel.user.ProfileUiState
-import android.widget.Toast
-import kotlinx.coroutines.launch
-import kotlin.Result
+import com.example.delivery.viewmodel.user.ProfileViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,31 +62,90 @@ fun ProfileScreen(
     var isEditing by remember { mutableStateOf(false) }
     var updateErrorMessage by remember { mutableStateOf<String?>(null) }
     
+    // Extract profileResponse from uiState for TopAppBar access
+    val profileResponse = (uiState as? ProfileUiState.Success)?.profile
+    val currentProfile = profileResponse?.profile
+    
+    // Editable state lifted to parent for TopAppBar Save button access
+    var editablePhone by remember { mutableStateOf("") }
+    var editableEmail by remember { mutableStateOf("") }
+    var editableAddress by remember { mutableStateOf("") }
+    var editableFirstName by remember { mutableStateOf("") }
+    var editableLastName by remember { mutableStateOf("") }
+    
     LaunchedEffect(userEmail) {
         userEmail?.let { email ->
             viewModel.loadProfileData(email)
         }
     }
     
+    // Initialize editable state when profile loads
+    LaunchedEffect(currentProfile) {
+        currentProfile?.let {
+            editablePhone = it.phone ?: ""
+            editableEmail = it.email ?: ""
+            editableAddress = it.address ?: ""
+            // Split name into firstName and lastName
+            val nameParts = it.name.split(" ", limit = 2)
+            editableFirstName = nameParts.getOrNull(0) ?: ""
+            editableLastName = nameParts.getOrNull(1) ?: ""
+        }
+    }
+    
     Scaffold(
         topBar = {
-            CommonTopAppBar(
-                title = "Profil",
-                showBack = true,
-                onBack = { navController.popBackStack() },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            isEditing = !isEditing
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFEBF4FF))
+            ) {
+                CommonTopAppBar(
+                    title = "Mon Profil",
+                    showBack = true,
+                    onBack = { navController.popBackStack() },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                if (isEditing) {
+                                    // Save logic when in edit mode
+                                    currentProfile?.let { profile ->
+                                        val updatedProfile = profile.copy(
+                                            firstName = editableFirstName.ifBlank { profile.firstName },
+                                            lastName = editableLastName.ifBlank { profile.lastName },
+                                            phone = editablePhone.ifBlank { profile.phone },
+                                            email = editableEmail.ifBlank { profile.email },
+                                            address = editableAddress.ifBlank { profile.address }
+                                        )
+                                        viewModel.updateProfile(
+                                            profile.id.toString(),
+                                            updatedProfile
+                                        ) { success, error ->
+                                            if (success) {
+                                                Toast.makeText(context, "Profil mis à jour", Toast.LENGTH_SHORT).show()
+                                                isEditing = false
+                                                updateErrorMessage = null
+                                                // Reload data to reflect changes
+                                                userEmail?.let { email -> viewModel.loadProfileData(email) }
+                                            } else {
+                                                updateErrorMessage = error
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Toggle edit mode
+                                    isEditing = true
+                                }
+                            }
+                        ) {
+                            Icon(
+                                if (isEditing) Icons.Default.Save else Icons.Default.Edit,
+                                contentDescription = if (isEditing) "Sauvegarder" else "Modifier",
+                                tint = Color(0xFF102A43)
+                            )
                         }
-                    ) {
-                        Icon(
-                            if (isEditing) Icons.Default.Save else Icons.Default.Edit,
-                            contentDescription = if (isEditing) "Sauvegarder" else "Modifier"
-                        )
                     }
-                }
-            )
+                )
+            }
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
@@ -122,7 +182,6 @@ fun ProfileScreen(
                 }
             }
             is ProfileUiState.Success -> {
-                val profileResponse = state.profile
                 val driverStats = state.stats
                 val vehicleMaintenance = state.maintenance
                 
@@ -157,22 +216,16 @@ fun ProfileScreen(
                                 profile = response.profile,
                                 userEmail = userEmail,
                                 isEditing = isEditing,
-                                onProfileUpdate = { updatedProfile: DriverProfile ->
-                                    viewModel.updateProfile(
-                                        response.profile.id.toString(),
-                                        updatedProfile
-                                    ) { success, error ->
-                                        if (success) {
-                                            Toast.makeText(context, "Profil mis à jour", Toast.LENGTH_SHORT).show()
-                                            isEditing = false
-                                            updateErrorMessage = null
-                                            // Reload data to reflect changes
-                                            userEmail?.let { email -> viewModel.loadProfileData(email) }
-                                        } else {
-                                            updateErrorMessage = error
-                                        }
-                                    }
-                                }
+                                editablePhone = editablePhone,
+                                editableEmail = editableEmail,
+                                editableAddress = editableAddress,
+                                editableFirstName = editableFirstName,
+                                editableLastName = editableLastName,
+                                onPhoneChange = { editablePhone = it },
+                                onEmailChange = { editableEmail = it },
+                                onAddressChange = { editableAddress = it },
+                                onFirstNameChange = { editableFirstName = it },
+                                onLastNameChange = { editableLastName = it }
                             )
                         }
                     }
@@ -198,8 +251,9 @@ fun ProfileScreen(
                         }
                     }
                     
-                    // Action Buttons
+                    // Action Buttons - Moved to end with distinct spacing
                     item {
+                        Spacer(modifier = Modifier.height(24.dp))
                         ProfileActionsCard(
                             onLogout = {
                                 authManager.logout(
@@ -215,6 +269,7 @@ fun ProfileScreen(
                                 )
                             }
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -227,12 +282,18 @@ fun ProfileHeaderCard(
     profile: DriverProfile,
     userEmail: String?,
     isEditing: Boolean,
-    onProfileUpdate: (DriverProfile) -> Unit
+    editablePhone: String,
+    editableEmail: String,
+    editableAddress: String,
+    editableFirstName: String,
+    editableLastName: String,
+    onPhoneChange: (String) -> Unit,
+    onEmailChange: (String) -> Unit,
+    onAddressChange: (String) -> Unit,
+    onFirstNameChange: (String) -> Unit,
+    onLastNameChange: (String) -> Unit
 ) {
     var editableName by remember { mutableStateOf(profile.name) }
-    var editablePhone by remember { mutableStateOf(profile.phone ?: "") }
-    var editableEmail by remember { mutableStateOf(userEmail ?: profile.email ?: "") }
-    var editableAddress by remember { mutableStateOf(profile.address ?: "") }
     
     // Debug logging
     println("🔍 DEBUG EMAIL - userEmail: $userEmail")
@@ -261,29 +322,28 @@ fun ProfileHeaderCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar with border
+                // Avatar with perfect CircleShape and premium brand blue border ring
                 Box(
                     modifier = Modifier
                         .size(70.dp)
                         .background(
                             MaterialTheme.colorScheme.primaryContainer,
-                            RoundedCornerShape(35.dp)
+                            CircleShape
                         )
                         .border(
                             width = 3.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(35.dp)
+                            color = Color(0xFF1976D2),
+                            shape = CircleShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Person,
                         contentDescription = "Profile",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF1976D2),
                         modifier = Modifier.size(35.dp)
                     )
                 }
-                
                 // Name and Status
                 Column(
                     modifier = Modifier.weight(1f)
@@ -292,33 +352,33 @@ fun ProfileHeaderCard(
                         text = editableName,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFF102A43)
                     )
                     
                     Spacer(modifier = Modifier.height(4.dp))
                     
-                    // Status Chip
+                    // Status Badge - Pill-shaped with soft light green background
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = CircleShape,
                         color = if (profile.status == "ACTIF") 
-                            Color(0xFF4CAF50).copy(alpha = 0.15f)
+                            Color(0xFFE6F4EA)
                         else 
                             MaterialTheme.colorScheme.errorContainer
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
+                                    .size(6.dp)
                                     .background(
                                         if (profile.status == "ACTIF") 
-                                            Color(0xFF4CAF50)
+                                            Color(0xFF137333)
                                         else 
                                             MaterialTheme.colorScheme.error,
-                                        RoundedCornerShape(4.dp)
+                                        CircleShape
                                     )
                             )
                             Text(
@@ -326,7 +386,7 @@ fun ProfileHeaderCard(
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (profile.status == "ACTIF") 
-                                    Color(0xFF2E7D32)
+                                    Color(0xFF137333)
                                 else 
                                     MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -396,7 +456,7 @@ fun ProfileHeaderCard(
                 )
             }
             
-            // Editable Fields with better design
+            // Editable Fields with slim OutlinedTextFields
             if (isEditing) {
                 Spacer(modifier = Modifier.height(8.dp))
                 
@@ -418,47 +478,52 @@ fun ProfileHeaderCard(
                             color = MaterialTheme.colorScheme.primary
                         )
                         
-                        ProfileEditField(
+                        SlimOutlinedTextField(
+                            icon = Icons.Default.Person,
+                            label = "Prénom",
+                            value = editableFirstName,
+                            onValueChange = onFirstNameChange
+                        )
+                        
+                        SlimOutlinedTextField(
+                            icon = Icons.Default.Person,
+                            label = "Nom",
+                            value = editableLastName,
+                            onValueChange = onLastNameChange
+                        )
+                        
+                        SlimOutlinedTextField(
                             icon = Icons.Default.Phone,
                             label = "Téléphone",
                             value = editablePhone,
-                            onValueChange = { editablePhone = it }
+                            onValueChange = onPhoneChange
                         )
                         
-                        ProfileEditField(
+                        SlimOutlinedTextField(
                             icon = Icons.Default.Email,
                             label = "Email",
                             value = editableEmail,
-                            onValueChange = { editableEmail = it }
+                            onValueChange = onEmailChange,
+                            readOnly = true,
+                            enabled = false
                         )
                         
-                        ProfileEditField(
+                        SlimOutlinedTextField(
                             icon = Icons.Default.LocationOn,
                             label = "Adresse",
                             value = editableAddress,
-                            onValueChange = { editableAddress = it }
+                            onValueChange = onAddressChange
                         )
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        Button(
-                            onClick = {
-                                val updatedProfile = profile.copy(
-                                    phone = editablePhone.ifBlank { profile.phone },
-                                    email = editableEmail.ifBlank { profile.email },
-                                    address = editableAddress.ifBlank { profile.address }
-                                )
-                                onProfileUpdate(updatedProfile)
-                            },
+                        Text(
+                            text = "Cliquez sur le bouton Sauvegarder dans la barre supérieure pour enregistrer",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Sauvegarder", color = MaterialTheme.colorScheme.onPrimary)
-                        }
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                 }
             }
@@ -581,6 +646,41 @@ fun InfoCard(
 }
 
 @Composable
+fun SlimOutlinedTextField(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    readOnly: Boolean = false,
+    enabled: Boolean = true
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { 
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall
+            )
+        },
+        leadingIcon = {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        shape = RoundedCornerShape(12.dp),
+        readOnly = readOnly,
+        enabled = enabled,
+        textStyle = MaterialTheme.typography.bodySmall
+    )
+}
+
+@Composable
 fun ProfileEditField(
     icon: ImageVector,
     label: String,
@@ -632,14 +732,14 @@ fun ProfileInfoField(
 fun VehicleInfoCard(vehicle: VehicleInfo) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            color = Color(0xFFE2E8F0)
         )
     ) {
         Column(
@@ -675,7 +775,7 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                         text = "Véhicule Assigné",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFF102A43)
                     )
                     Text(
                         text = vehicle.name,
@@ -747,7 +847,7 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                     )
                 }
                 
-                // Capacity Section with progress bars
+                // Capacity Section with upgraded progress bars
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -756,7 +856,7 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
                             text = "Capacités",
@@ -765,19 +865,21 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                             color = MaterialTheme.colorScheme.primary
                         )
                         
-                        CapacityProgressBar(
+                        PremiumCapacityProgressBar(
                             icon = Icons.Default.Inventory,
                             label = "Poids",
-                            value = "${vehicle.capacityWeight.toInt()} kg",
-                            progress = 0.7f, // Example: 70% of max capacity
+                            currentValue = "${vehicle.capacityWeight.toInt()} kg",
+                            maxValue = "${(vehicle.capacityWeight * 1.4).toInt()} kg",
+                            progress = 0.7f,
                             color = MaterialTheme.colorScheme.primary
                         )
                         
-                        CapacityProgressBar(
+                        PremiumCapacityProgressBar(
                             icon = Icons.Default.Landscape,
                             label = "Volume",
-                            value = "${vehicle.capacityVolume.toInt()} m³",
-                            progress = 0.5f, // Example: 50% of max capacity
+                            currentValue = "${vehicle.capacityVolume.toInt()} m³",
+                            maxValue = "${(vehicle.capacityVolume * 1.5).toInt()} m³",
+                            progress = 0.5f,
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
@@ -818,6 +920,61 @@ fun VehicleInfoItem(
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
+    }
+}
+
+@Composable
+fun PremiumCapacityProgressBar(
+    icon: ImageVector,
+    label: String,
+    currentValue: String,
+    maxValue: String,
+    progress: Float,
+    color: Color
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Header with icon and labels
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Text(
+                text = "$currentValue / $maxValue",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = color
+            )
+        }
+        
+        // Thick progress bar with rounded ends
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp)),
+            color = color,
+            trackColor = color.copy(alpha = 0.15f)
+        )
     }
 }
 
@@ -877,14 +1034,14 @@ fun CapacityProgressBar(
 fun DepotInfoCard(depot: DepotInfo) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            color = Color(0xFFE2E8F0)
         )
     ) {
         Column(
@@ -920,7 +1077,7 @@ fun DepotInfoCard(depot: DepotInfo) {
                         text = "Dépôt d'Attachement",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFF102A43)
                     )
                     Text(
                         text = depot.name,
@@ -1074,14 +1231,14 @@ fun ContactInfoCard(
 fun DriverStatsCard(stats: DriverStatsSummary) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            color = Color(0xFFE2E8F0)
         )
     ) {
         Column(
@@ -1117,7 +1274,7 @@ fun DriverStatsCard(stats: DriverStatsSummary) {
                         text = "Statistiques de Performance",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFF102A43)
                     )
                     Text(
                         text = "Vue d'ensemble de votre activité",
@@ -1129,42 +1286,62 @@ fun DriverStatsCard(stats: DriverStatsSummary) {
             
             Spacer(modifier = Modifier.height(20.dp))
             
-            // Key Metrics Grid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // 2x2 Grid Metrics
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Total Trips
-                StatMetricCard(
-                    value = stats.totalTrips.toString(),
-                    label = "Total Trajets",
-                    icon = Icons.Default.Route,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
+                // First Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Total Trips
+                    StatMetricCard(
+                        value = stats.totalTrips.toString(),
+                        label = "Total Trajets",
+                        icon = Icons.Default.Route,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    // Completed Trips
+                    StatMetricCard(
+                        value = stats.completedTrips.toString(),
+                        label = "Terminés",
+                        icon = Icons.Default.TaskAlt,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 
-                // Completed Trips
-                StatMetricCard(
-                    value = stats.completedTrips.toString(),
-                    label = "Terminés",
-                    icon = Icons.Default.TaskAlt,
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                // Success Rate
-                StatMetricCard(
-                    value = "${stats.successRate}%",
-                    label = "Succès",
-                    icon = Icons.AutoMirrored.Filled.TrendingUp,
-                    color = if (stats.successRate >= 80) 
-                        MaterialTheme.colorScheme.tertiary 
-                    else if (stats.successRate >= 60) 
-                        MaterialTheme.colorScheme.secondary 
-                    else 
-                        MaterialTheme.colorScheme.error,
-                    modifier = Modifier.weight(1f)
-                )
+                // Second Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Success Rate - High visibility with vibrant emerald green
+                    StatMetricCard(
+                        value = "${stats.successRate}%",
+                        label = "Taux de Succès",
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        color = if (stats.successRate >= 80) 
+                            Color(0xFF10B981)
+                        else if (stats.successRate >= 60) 
+                            MaterialTheme.colorScheme.secondary 
+                        else 
+                            MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    // Total Deliveries
+                    StatMetricCard(
+                        value = stats.deliveredShipments.toString(),
+                        label = "Livraisons",
+                        icon = Icons.Default.LocalShipping,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -1181,7 +1358,7 @@ fun DriverStatsCard(stats: DriverStatsSummary) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Livraisons",
+                        text = "Détails Livraisons",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
@@ -1190,13 +1367,6 @@ fun DriverStatsCard(stats: DriverStatsSummary) {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        DetailedStatRow(
-                            icon = Icons.Default.LocalShipping,
-                            label = "Total Livraisons",
-                            value = stats.deliveredShipments.toString(),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        
                         DetailedStatRow(
                             icon = Icons.Default.Inventory,
                             label = "Quantité Totale",
@@ -1337,14 +1507,14 @@ fun ProfileActionsCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            color = Color(0xFFE2E8F0)
         )
     ) {
         Column(
@@ -1381,7 +1551,7 @@ fun ProfileActionsCard(
                         text = "Actions Rapides",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFF102A43)
                     )
                     Text(
                         text = "Gérez votre profil et vos préférences",
@@ -1393,17 +1563,29 @@ fun ProfileActionsCard(
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Action Buttons
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            // Premium Logout Button
+            Button(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFFDAD9),
+                    contentColor = Color(0xFFBA1A1A)
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                // Logout Button
-                ActionButton(
-                    icon = Icons.AutoMirrored.Filled.Logout,
-                    label = "Déconnexion",
-                    description = "Se déconnecter de l'application",
-                    color = MaterialTheme.colorScheme.error,
-                    onClick = onLogout
+                Icon(
+                    Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = "Déconnexion",
+                    tint = Color(0xFFBA1A1A),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Déconnexion",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

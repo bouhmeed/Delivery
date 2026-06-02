@@ -1,7 +1,6 @@
-﻿package com.example.delivery.auth
-
+﻿
+package com.example.delivery.auth
 import com.example.delivery.repository.Result
-
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
@@ -19,10 +18,10 @@ data class UserInfo(
     val nickname: String?
 )
 
+
 class AuthManager(private val context: Context) {
     private val account = Auth0(Auth0Config.CLIENT_ID, Auth0Config.DOMAIN)
     private val prefs: SharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-
     fun login(onSuccess: (Credentials, UserInfo) -> Unit, onFailure: (AuthenticationException) -> Unit) {
         WebAuthProvider.login(account)
             .withScheme(Auth0Config.SCHEME)
@@ -31,13 +30,10 @@ class AuthManager(private val context: Context) {
                 override fun onSuccess(result: Credentials) {
                     // Extract user info from ID token
                     val userInfo = extractUserInfoFromToken(result.idToken ?: result.accessToken)
-                    
                     // Save user info and JWT locally
                     saveUserInfo(userInfo, result.accessToken)
-                    
                     onSuccess(result, userInfo)
                 }
-
                 override fun onFailure(error: AuthenticationException) {
                     onFailure(error)
                 }
@@ -86,11 +82,9 @@ class AuthManager(private val context: Context) {
     fun getUserEmail(): String? {
         return prefs.getString("user_email", null)
     }
-
     fun getUserName(): String? {
         return prefs.getString("user_name", null)
     }
-
     fun getAccessToken(): String? {
         return prefs.getString("access_token", null)
     }
@@ -98,14 +92,12 @@ class AuthManager(private val context: Context) {
     fun logout(onSuccess: () -> Unit, onFailure: (AuthenticationException) -> Unit) {
         // Clear saved user info
         prefs.edit().clear().apply()
-        
         WebAuthProvider.logout(account)
             .withScheme(Auth0Config.SCHEME)
             .start(context, object : Callback<Void?, AuthenticationException> {
                 override fun onSuccess(result: Void?) {
                     onSuccess()
                 }
-
                 override fun onFailure(error: AuthenticationException) {
                     onFailure(error)
                 }

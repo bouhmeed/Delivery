@@ -1,6 +1,7 @@
 ﻿package com.example.delivery.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,117 +61,111 @@ fun DateFilterRow(
         }
     }
     
-    Card(
+    // Seamless background matching TopAppBar
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp,
-            pressedElevation = 4.dp
-        )
+            .background(Color(0xFFEBF4FF))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Previous day button
-            IconButton(
-                onClick = onPreviousDay,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Color(0xFFF5F5F5),
-                        RoundedCornerShape(12.dp)
-                    )
-            ) {
+        // Previous day pill chip
+        FilterChip(
+            selected = false,
+            onClick = onPreviousDay,
+            label = {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                     contentDescription = "Jour précédent",
-                    tint = Color(0xFF666666)
+                    tint = Color(0xFF102A43),
+                    modifier = Modifier.size(20.dp)
                 )
-            }
-            
-            // Date display
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { showDatePicker = true }
-            ) {
-                Text(
-                    text = formatDateForDisplay(selectedDate),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF333333)
-                )
-                
+            },
+            shape = RoundedCornerShape(20.dp),
+            colors = FilterChipDefaults.filterChipColors(
+                containerColor = Color.White,
+                selectedContainerColor = Color(0xFF102A43),
+                selectedLabelColor = Color.White,
+                labelColor = Color(0xFF102A43)
+            ),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        )
+        
+        // Date display pill chip
+        FilterChip(
+            selected = true,
+            onClick = { showDatePicker = true },
+            label = {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.CalendarToday,
                         contentDescription = "Sélectionner une date",
-                        tint = Color(0xFF4CAF50),
+                        tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = getDateTypeText(selectedDate),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF4CAF50)
+                        text = formatDateForDisplay(selectedDate),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-            }
-            
-            // Next day button
-            IconButton(
-                onClick = onNextDay,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Color(0xFFF5F5F5),
-                        RoundedCornerShape(12.dp)
-                    )
-            ) {
+            },
+            shape = RoundedCornerShape(20.dp),
+            colors = FilterChipDefaults.filterChipColors(
+                containerColor = Color(0xFF102A43),
+                selectedContainerColor = Color(0xFF102A43),
+                selectedLabelColor = Color.White,
+                labelColor = Color.White
+            )
+        )
+        
+        // Next day pill chip
+        FilterChip(
+            selected = false,
+            onClick = onNextDay,
+            label = {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = "Jour suivant",
-                    tint = Color(0xFF666666)
+                    tint = Color(0xFF102A43),
+                    modifier = Modifier.size(20.dp)
                 )
-            }
-        }
+            },
+            shape = RoundedCornerShape(20.dp),
+            colors = FilterChipDefaults.filterChipColors(
+                containerColor = Color.White,
+                selectedContainerColor = Color(0xFF102A43),
+                selectedLabelColor = Color.White,
+                labelColor = Color(0xFF102A43)
+            ),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        )
         
-        // Today button (only show if not today)
+        // Today pill chip (only show if not today)
         if (!isToday(selectedDate)) {
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Button(
+            FilterChip(
+                selected = false,
                 onClick = onTodayClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4CAF50),
-                    contentColor = Color.White
+                label = {
+                    Text(
+                        text = "Aujourd'hui",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                },
+                shape = RoundedCornerShape(20.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = Color.White,
+                    selectedContainerColor = Color(0xFF102A43),
+                    selectedLabelColor = Color.White,
+                    labelColor = Color(0xFF102A43)
                 ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 2.dp,
-                    pressedElevation = 4.dp
-                )
-            ) {
-                Text(
-                    text = "Aujourd'hui",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            )
         }
     }
 }
