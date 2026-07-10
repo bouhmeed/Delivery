@@ -121,10 +121,16 @@ class DirectTripDetailRepository {
                     
                     val originId = sRow.optInt("originId", 0)
                     val destinationId = sRow.optInt("destinationId", 0)
+                    val customerId = if (!sRow.isNull("customerId")) sRow.optInt("customerId") else null
+                    
                     // Fetch origin location details
                     val originLocationJson = JSONObject(DatabaseManager.executeQuery("SELECT * FROM \"Location\" WHERE id = $originId")).optJSONArray("rows")?.optJSONObject(0)
                     // Fetch destination location details
                     val destinationLocationJson = JSONObject(DatabaseManager.executeQuery("SELECT * FROM \"Location\" WHERE id = $destinationId")).optJSONArray("rows")?.optJSONObject(0)
+                    // Fetch customer details if customerId exists
+                    val customerJson = if (customerId != null) {
+                        JSONObject(DatabaseManager.executeQuery("SELECT * FROM \"Client\" WHERE id = $customerId")).optJSONArray("rows")?.optJSONObject(0)
+                    } else null
                     val origin = LocationDetail(
                         id = originId,
                         name = originLocationJson?.optString("name") ?: "Origin",
@@ -148,11 +154,24 @@ class DirectTripDetailRepository {
                         locationType = destinationLocationJson?.optString("locationType")
                     )
 
+                    val customer = if (customerJson != null) {
+                        ClientDetail(
+                            id = customerJson.optInt("id"),
+                            name = customerJson.optString("name"),
+                            address = customerJson.optString("address"),
+                            city = customerJson.optString("city"),
+                            postalCode = customerJson.optString("postalCode"),
+                            phone = customerJson.optString("phone"),
+                            email = customerJson.optString("email"),
+                            contact = customerJson.optString("contact")
+                        )
+                    } else null
+
                     shipments.add(
     ShipmentDetail(
         id = sRow.optInt("id"),
         shipmentNo = sRow.optString("shipmentNo"),
-        customerId = if (!sRow.isNull("customerId")) sRow.optInt("customerId") else null,
+        customerId = customerId,
         type = sRow.optString("type", ""),
         originId = originId,
         destinationId = destinationId,
@@ -184,10 +203,10 @@ class DirectTripDetailRepository {
         linkStatus = null,
         podDone = null,
         returnsDone = null,
-        customerName = null,
-        customerAddress = null,
-        customerCity = null,
-        customerPhone = null,
+        customerName = customer?.name,
+        customerAddress = customer?.address,
+        customerCity = customer?.city,
+        customerPhone = customer?.phone,
         originName = origin.name,
         originAddress = origin.address,
         originCity = origin.city,
@@ -196,7 +215,7 @@ class DirectTripDetailRepository {
         destinationCity = destination.city,
         vehicleName = null,
         vehicleRegistration = null,
-        customer = null,
+        customer = customer,
         executionStatus = null,
         origin = origin,
         destination = destination

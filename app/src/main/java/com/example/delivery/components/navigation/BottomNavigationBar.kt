@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -19,7 +20,9 @@ fun BottomNavigationBar(navController: NavController) {
         Screen.Profile
     )
 
-    NavigationBar {
+    NavigationBar(
+        containerColor = Color(0xFFEAF2F8)
+    ) {
         val navBackStackEntry = navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry.value?.destination?.route
 
@@ -37,13 +40,14 @@ fun BottomNavigationBar(navController: NavController) {
                     Icon(
                         when (screen.route) {
                             "home" -> Icons.Default.Home
-                            "tour" -> Icons.Default.DirectionsCar
+                            "tour" -> Icons.Default.Map
                             "delivery" -> Icons.Default.LocalShipping
                             "history" -> Icons.Default.History
                             "profile" -> Icons.Default.Person
                             else -> Icons.Default.Home
                         },
-                        contentDescription = null
+                        contentDescription = null,
+                        tint = if (isSelected) Color(0xFF4A90E2) else Color(0xFF6B7280)
                     )
                 },
                 label = { 
@@ -59,6 +63,13 @@ fun BottomNavigationBar(navController: NavController) {
                     )
                 },
                 selected = isSelected,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4A90E2),
+                    unselectedIconColor = Color(0xFF6B7280),
+                    selectedTextColor = Color(0xFF4A90E2),
+                    unselectedTextColor = Color(0xFF6B7280),
+                    indicatorColor = Color(0xFFE3F2FD)
+                ),
                 onClick = {
                     navController.navigate(screen.route) {
                         popUpTo(navController.graph.startDestinationId)

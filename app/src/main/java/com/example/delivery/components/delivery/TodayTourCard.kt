@@ -88,28 +88,6 @@ fun TodayTourCard(
                         modifier = Modifier.padding(start = 32.dp)
                     )
                 }
-                
-                // Badge de statut
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = when (tourInfo.status) {
-                        "IN_PROGRESS" -> Color(0xFF4CAF50)
-                        "COMPLETED" -> Color(0xFF2196F3)
-                        else -> Color(0xFF1976D2)
-                    }
-                ) {
-                    Text(
-                        text = when (tourInfo.status) {
-                            "IN_PROGRESS" -> "En cours"
-                            "COMPLETED" -> "Terminée"
-                            else -> "Planifiée"
-                        },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
             
             Spacer(modifier = Modifier.height(20.dp))
@@ -215,14 +193,18 @@ fun TodayTourCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                val allCompleted = statistics.completedShipments == statistics.totalShipments && statistics.totalShipments > 0
+                
                 Button(
                     onClick = {
                         // Naviguer vers le suivi des tournées avec la date spécifique de la tournée
                         navController?.navigate("delivery?date=${tourInfo.date.substring(0, 10)}")
                     },
                     modifier = Modifier.weight(1f),
+                    enabled = !allCompleted,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1976D2)
+                        containerColor = if (allCompleted) Color.Gray else Color(0xFF1976D2),
+                        disabledContainerColor = Color.Gray
                     )
                 ) {
                     Icon(

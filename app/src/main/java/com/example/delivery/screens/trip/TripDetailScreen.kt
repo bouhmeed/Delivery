@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.shadow
 
 
 
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 
@@ -230,134 +231,184 @@ fun TripDetailScreen(
 
 
 
+    val PureWhite = Color(0xFFFFFFFF)
+    val FigmaShadowColor = Color(0xFF0C6BCE).copy(alpha = 0.10f)
+    
     Scaffold(
-
-
-
         topBar = {
 
 
 
-            TopAppBar(
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, spotColor = FigmaShadowColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
+                    ) {
+                        TopAppBar(
 
 
 
-                title = { 
+                            title = { 
+                                Text("Détails du Trajet", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = PureWhite)
+                            },
 
 
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                            navigationIcon = {
 
 
 
-                        Icon(
+                                IconButton(
+                                    onClick = { navController.navigateUp() },
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
 
 
 
-                            imageVector = Icons.Default.DirectionsCar,
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = PureWhite)
 
 
 
-                            contentDescription = null,
+                                }
 
 
 
-                            modifier = Modifier.padding(end = 8.dp),
+                            },
 
 
 
-                            tint = MaterialTheme.colorScheme.primary
+                            actions = {
 
 
 
+                                IconButton(
+                                    onClick = { 
+
+
+
+                                        viewModel.loadTripDetails(tripId)
+
+
+
+                                    },
+                                    modifier = Modifier.padding(end = 4.dp).size(36.dp)
+                                ) {
+
+
+
+                                    Icon(
+
+
+
+                                        Icons.Default.Refresh,
+
+
+
+                                        contentDescription = "Actualiser",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                        tint = PureWhite,
+                                        modifier = Modifier.size(20.dp)
+
+
+
+                                    )
+
+
+
+                                }
+
+
+
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = PureWhite
+                            )
                         )
-
-
-
-                        Text("Détails du Trajet", fontWeight = FontWeight.Bold)
-
-
-
                     }
-
-
-
-                },
-
-
-
-                navigationIcon = {
-
-
-
-                    IconButton(onClick = { navController.navigateUp() }) {
-
-
-
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-
-
-
-                    }
-
-
-
-                },
-
-
-
-                actions = {
-
-
-
-                    IconButton(onClick = { 
-
-
-
-                        viewModel.loadTripDetails(tripId)
-
-
-
-                    }) {
-
-
-
-                        Icon(
-
-
-
-                            Icons.Default.Refresh,
-
-
-
-                            contentDescription = "Actualiser",
-
-
-
-                            tint = MaterialTheme.colorScheme.primary
-
-
-
-                        )
-
-
-
-                    }
-
-
-
                 }
-
-
-
-            )
-
-
-
+            }
         }
-
-
-
     ) { paddingValues ->
 
 
@@ -930,7 +981,9 @@ fun TripDetailContent(
 
 
 
-                    // TODO: Implémenter la livraison
+                    // Utiliser les informations du client depuis la base de données
+                    val recipientName = shipment.customerName ?: shipment.customer?.name ?: "Client"
+                    val deliveryNotes = "Livraison ${shipment.shipmentNo} - ${shipment.destinationName ?: shipment.destinationCity ?: ""}"
 
 
 
@@ -954,11 +1007,11 @@ fun TripDetailContent(
 
 
 
-                            recipientName = "Client",
+                            recipientName = recipientName,
 
 
 
-                            deliveryNotes = "Livré avec succès"
+                            deliveryNotes = deliveryNotes
 
 
 

@@ -13,6 +13,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,7 +27,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -49,6 +52,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.io.File
+
+// ─────────────────────────────────────────────
+// Figma UI Kit Color Palette
+// ─────────────────────────────────────────────
+private val FigmaBg           = Color(0xFFEAF2F8)
+private val PureWhite         = Color(0xFFFFFFFF)
+private val FigmaHeaderBlue   = Color(0xFF0C6BCE)
+private val FigmaTextDark     = Color(0xFF1B2A4A)
+private val FigmaTextMuted    = Color(0xFF8F9BB3)
+private val FigmaShadowColor  = Color(0xFF0C6BCE).copy(alpha = 0.08f)
+private val FigmaLightGrey    = Color(0xFFF1F5F9)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -200,18 +214,55 @@ fun ReturnsScreen(
     }
     
     Scaffold(
+        containerColor = FigmaBg,
         topBar = {
-            TopAppBar(
-                title = { Text("Retours / Vides") },
-                navigationIcon = {
-                    IconButton(onClick = onBackPressed) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Retour"
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, spotColor = FigmaShadowColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
+                    ) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "Retours / Vides",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(
+                                    onClick = onBackPressed,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Retour",
+                                        tint = PureWhite
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = PureWhite
+                            )
                         )
                     }
                 }
-            )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->

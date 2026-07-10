@@ -1,3 +1,4 @@
+// TourneeScreen.kt – UI layer only, all data handled by HomeViewModel
 package com.example.delivery.screens.delivery
 
 import com.example.delivery.repository.Result
@@ -61,6 +62,20 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
+// ─────────────────────────────────────────────
+// Figma UI Kit Color Palette
+// ─────────────────────────────────────────────
+private val FigmaBg           = Color(0xFFEAF2F8) // Soft sky-blue layout background
+private val PureWhite         = Color(0xFFFFFFFF)
+private val FigmaHeaderBlue   = Color(0xFF0C6BCE) // Royal blue
+private val FigmaTextDark     = Color(0xFF1B2A4A) // Dark slate for primary text
+private val FigmaTextMuted    = Color(0xFF8F9BB3) // Subtle grey for secondary label
+private val FigmaAmber        = Color(0xFFFF9F0A)
+private val FigmaRed          = Color(0xFFFF3B30)
+private val FigmaGreen        = Color(0xFF34C759)
+private val FigmaShadowColor  = Color(0xFF0C6BCE).copy(alpha = 0.08f)
+private val FigmaLightGrey    = Color(0xFFF1F5F9)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TourneeScreen(navController: NavController) {
@@ -73,26 +88,24 @@ fun TourneeScreen(navController: NavController) {
     var currentMonth by remember { mutableStateOf(YearMonth.from(LocalDate.now())) }
     var showStats by remember { mutableStateOf(false) }
     
-    // États pour la recherche
+    // Search state
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
         
-    // États pour les données Trip et User
+    // Data states
     var trips by remember { mutableStateOf<List<Trip>>(emptyList()) }
     var isLoadingTrips by remember { mutableStateOf(false) }
     var tripError by remember { mutableStateOf<String?>(null) }
     var currentDriver by remember { mutableStateOf<UserResponse?>(null) }
     var isLoadingUser by remember { mutableStateOf(false) }
     
-    // États pour les expéditions
+    // Shipments state
     var tripShipments by remember { mutableStateOf<Map<Int, List<com.example.delivery.models.delivery.ShipmentSearchDetail>>>(emptyMap()) }
-    var isLoadingShipments by remember { mutableStateOf(false) }
     
-    // Cache pour les véhicules et chauffeurs
+    // Cache
     var vehicleCache by remember { mutableStateOf<Map<String, Vehicle>>(emptyMap()) }
     var driverCache by remember { mutableStateOf<Map<String, Driver>>(emptyMap()) }
     
-    // Fonctions pour gérer le cache
     fun addToVehicleCache(id: String, vehicle: Vehicle) {
         vehicleCache = vehicleCache + (id to vehicle)
     }
@@ -101,7 +114,6 @@ fun TourneeScreen(navController: NavController) {
         driverCache = driverCache + (id to driver)
     }
     
-    // Fonction pour charger les expéditions d'un trip
     fun loadTripShipments(tripId: Int) {
         if (!tripShipments.containsKey(tripId)) {
             coroutineScope.launch {
@@ -118,7 +130,6 @@ fun TourneeScreen(navController: NavController) {
         }
     }
     
-    // Fonction pour charger les trips du driver connecté
     fun loadDriverTrips(driverId: String) {
         coroutineScope.launch {
             isLoadingTrips = true
@@ -138,7 +149,6 @@ fun TourneeScreen(navController: NavController) {
         }
     }
     
-    // Fonction pour charger les informations du driver connecté
     fun loadCurrentUser() {
         coroutineScope.launch {
             isLoadingUser = true
@@ -169,8 +179,12 @@ fun TourneeScreen(navController: NavController) {
         }
     }
     
-    // Fonction pour recharger (utilise le driverId déjà chargé)
     fun refreshTrips() {
+        trips = emptyList()
+        tripShipments = emptyMap()
+        vehicleCache = emptyMap()
+        driverCache = emptyMap()
+        
         val driverId = currentDriver?.driverId?.toString()
         if (driverId != null) {
             loadDriverTrips(driverId)
@@ -179,12 +193,10 @@ fun TourneeScreen(navController: NavController) {
         }
     }
     
-    // Charger l'utilisateur et ses trips au démarrage
     LaunchedEffect(Unit) {
         loadCurrentUser()
     }
     
-    // Fonction pour extraire la date d'un trip
     fun getTripDate(trip: Trip): LocalDate? {
         return try {
             if (trip.tripDate.isNotEmpty()) {
@@ -195,7 +207,6 @@ fun TourneeScreen(navController: NavController) {
         }
     }
     
-    // Filtrer les trips par date sélectionnée ET recherche
     val tripsForSelectedDate = remember(trips, selectedDate, searchQuery) {
         trips.filter { trip ->
             val tripDate = getTripDate(trip)
@@ -212,7 +223,6 @@ fun TourneeScreen(navController: NavController) {
         }
     }
     
-    // Compter les trips par jour pour le calendrier
     val tripsByDate = remember(trips) {
         trips.groupBy { trip -> getTripDate(trip) }
             .mapValues { it.value.size }
@@ -220,7 +230,6 @@ fun TourneeScreen(navController: NavController) {
             .mapKeys { it.key!! }
     }
     
-    // Calculer le taux de progression global
     val completionProgress = remember(tripsForSelectedDate) {
         if (tripsForSelectedDate.isEmpty()) 0f
         else {
@@ -230,53 +239,78 @@ fun TourneeScreen(navController: NavController) {
     }
     
     Scaffold(
+        containerColor = FigmaBg,
         topBar = {
+            // ── Simple White Top Bar (As requested) ──
             Column {
-                // Sleek custom bar container matching 0xFFEBF4FF
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "Ma Tournée",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF102A43) // Deep navy
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, spotColor = FigmaShadowColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
+                    ) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "Ma Tournée",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(
+                                    onClick = { navController.navigate(Screen.Home.route) },
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = PureWhite
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(
+                                    onClick = { refreshTrips() },
+                                    modifier = Modifier.padding(end = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Refresh,
+                                        contentDescription = "Refresh",
+                                        tint = PureWhite
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = PureWhite
                             )
                         )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navController.navigate(Screen.Home.route) }) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color(0xFF102A43)
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { refreshTrips() }) {
-                            Icon(
-                                imageVector = Icons.Filled.Refresh,
-                                contentDescription = "Refresh",
-                                tint = Color(0xFF102A43)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.White
-                    )
-                )
-                // Thin linear progress bar right beneath TopAppBar representing trip completion percentage
+                    }
+                }
+                // Thin progress indicator underneath TopAppBar
                 LinearProgressIndicator(
                     progress = completionProgress,
-                    modifier = Modifier.fillMaxWidth().height(3.dp),
-                    color = Color(0xFF1976D2),
-                    trackColor = Color(0xFFE0E0E0)
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                    color = FigmaHeaderBlue,
+                    trackColor = FigmaLightGrey
                 )
             }
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
-        // Précharger les expéditions pour les trips affichés
         LaunchedEffect(tripsForSelectedDate) {
             tripsForSelectedDate.forEach { trip ->
                 loadTripShipments(trip.id.toInt())
@@ -286,90 +320,92 @@ fun TourneeScreen(navController: NavController) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF7FAFC))
+                .background(FigmaBg)
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 16.dp),
+                .padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // En-tête avec calendrier mensuel complet
+            // ── Calendar View ──
             item {
-                TourneeCalendarCard(
-                    currentMonth = currentMonth,
-                    selectedDate = selectedDate,
-                    toursByDate = tripsByDate,
-                    onDateSelected = { date -> selectedDate = date },
-                    onMonthChanged = { month -> currentMonth = month }
-                )
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    TourneeCalendarCard(
+                        currentMonth = currentMonth,
+                        selectedDate = selectedDate,
+                        toursByDate = tripsByDate,
+                        onDateSelected = { date -> selectedDate = date },
+                        onMonthChanged = { month -> currentMonth = month }
+                    )
+                }
             }
             
-            // Barre de recherche
+            // ── Search bar ──
             item {
-                TripSearchBar(
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it },
-                    onSearchActiveChange = { isSearchActive = it },
-                    onClearSearch = { searchQuery = "" },
-                    placeholder = "Rechercher un trip..."
-                )
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    TripSearchBar(
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        onSearchActiveChange = { isSearchActive = it },
+                        onClearSearch = { searchQuery = "" },
+                        placeholder = "Rechercher un trip..."
+                    )
+                }
             }
             
-            // Section titre
+            // ── Title list view ──
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Trips du ${selectedDate.dayOfMonth} ${selectedDate.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${selectedDate.year}",
-                        style = MaterialTheme.typography.titleMedium,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF102A43),
+                        color = FigmaTextDark,
                         modifier = Modifier.weight(1f)
                     )
                     
                     if (searchQuery.isNotBlank()) {
                         Text(
                             text = "${tripsForSelectedDate.size} résultat(s)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF1976D2),
+                            fontSize = 13.sp,
+                            color = FigmaHeaderBlue,
                             fontWeight = FontWeight.Medium
                         )
                     }
                 }
             }
             
-            // Afficher les trips du jour sélectionné
+            // Show trips lists
             if (tripsForSelectedDate.isNotEmpty()) {
                 items(tripsForSelectedDate) { trip ->
-                    TripDetailCardRedesigned(
-                        trip = trip,
-                        directRepo = directRepo,
-                        vehicleCache = vehicleCache,
-                        driverCache = driverCache,
-                        onVehicleLoaded = { id, vehicle -> addToVehicleCache(id, vehicle) },
-                        onDriverLoaded = { id, driver -> addToDriverCache(id, driver) },
-                        onTripClick = { tripId -> 
-                            val tripDateFormatted = trip.tripDate.substring(0, 10)
-                            navController.navigate("delivery?date=$tripDateFormatted")
-                        },
-                        tripShipments = tripShipments,
-                        onLoadShipments = { tripId -> loadTripShipments(tripId) },
-                        navController = navController
-                    )
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        TripDetailCardRedesigned(
+                            trip = trip,
+                            directRepo = directRepo,
+                            vehicleCache = vehicleCache,
+                            driverCache = driverCache,
+                            onVehicleLoaded = { id, vehicle -> addToVehicleCache(id, vehicle) },
+                            onDriverLoaded = { id, driver -> addToDriverCache(id, driver) },
+                            onTripClick = { tripId -> 
+                                val tripDateFormatted = trip.tripDate.substring(0, 10)
+                                navController.navigate("delivery?date=$tripDateFormatted")
+                            },
+                            tripShipments = tripShipments,
+                            onLoadShipments = { tripId -> loadTripShipments(tripId) },
+                            navController = navController
+                        )
+                    }
                 }
             } else if (!isLoadingTrips && !isLoadingUser && tripError == null) {
                 item {
-                    Card(
+                    FigmaCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color.White
-                        ),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                            .padding(horizontal = 16.dp)
                     ) {
                         Column(
                             modifier = Modifier
@@ -380,31 +416,38 @@ fun TourneeScreen(navController: NavController) {
                             Icon(
                                 imageVector = Icons.Default.EventBusy,
                                 contentDescription = "Aucun trip",
-                                tint = Color(0xFF94A3B8),
+                                tint = FigmaTextMuted,
                                 modifier = Modifier.size(56.dp)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "Aucun trip prévu",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0xFF475569)
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FigmaTextDark
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Profitez de cette journée ou sélectionnez une autre date.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFF64748B),
+                                fontSize = 13.sp,
+                                color = FigmaTextMuted,
                                 textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
             }
+            
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
 }
 
+// ─────────────────────────────────────────────
 // Modern Monthly Calendar Component
+// ─────────────────────────────────────────────
 @Composable
 fun TourneeCalendarCard(
     currentMonth: YearMonth,
@@ -413,18 +456,13 @@ fun TourneeCalendarCard(
     onDateSelected: (LocalDate) -> Unit,
     onMonthChanged: (YearMonth) -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(2.dp, RoundedCornerShape(24.dp)),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+    FigmaCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(24.dp)
+            modifier = Modifier.padding(20.dp)
         ) {
-            // Modern Month Navigation Header
+            // Month navigation row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -432,37 +470,37 @@ fun TourneeCalendarCard(
             ) {
                 IconButton(
                     onClick = { onMonthChanged(currentMonth.minusMonths(1)) },
-                    modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFF8FAFC))
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(FigmaBg)
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                         contentDescription = "Mois précédent",
-                        tint = Color(0xFF102A43),
+                        tint = FigmaTextDark,
                         modifier = Modifier.size(20.dp)
                     )
                 }
                 
                 Text(
                     text = "${currentMonth.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${currentMonth.year}",
-                    style = MaterialTheme.typography.titleLarge,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF102A43)
+                    color = FigmaTextDark
                 )
                 
                 IconButton(
                     onClick = { onMonthChanged(currentMonth.plusMonths(1)) },
-                    modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFF8FAFC))
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(FigmaBg)
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = "Mois suivant",
-                        tint = Color(0xFF102A43),
+                        tint = FigmaTextDark,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             // Days of the week header
             Row(
@@ -472,16 +510,16 @@ fun TourneeCalendarCard(
                 listOf("Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim").forEach { day ->
                     Text(
                         text = day,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FigmaTextMuted,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             
             // Calendar Grid
             TourneeCalendarGrid(
@@ -503,33 +541,25 @@ fun TourneeCalendarGrid(
 ) {
     val firstDayOfMonth = currentMonth.atDay(1)
     val lastDayOfMonth = currentMonth.atEndOfMonth()
-    
-    // Correct calculation for first day of week (Monday = 0)
     val firstDayOfWeek = (firstDayOfMonth.dayOfWeek.value - 1) % 7
     
-    // Create calendar days
     val calendarDays = mutableListOf<LocalDate?>()
     
-    // Add empty days at the beginning
     repeat(firstDayOfWeek) {
         calendarDays.add(null)
     }
     
-    // Add all days of the month
     for (day in 1..lastDayOfMonth.dayOfMonth) {
         calendarDays.add(currentMonth.atDay(day))
     }
     
-    // Display in 7-column grid
     Column {
         var weekDays = mutableListOf<LocalDate?>()
         
         calendarDays.forEachIndexed { index, date ->
             weekDays.add(date)
             
-            // Create a row each week (7 days)
             if ((index + 1) % 7 == 0 || index == calendarDays.lastIndex) {
-                // Complete the week if necessary
                 while (weekDays.size < 7) {
                     weekDays.add(null)
                 }
@@ -572,47 +602,44 @@ fun TourneeCalendarDay(
 ) {
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(40.dp)
             .clickable(enabled = date != null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (date != null) {
-            // Selected day: solid blue circle
             if (isSelected) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1976D2)),
+                        .background(FigmaHeaderBlue),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
+                        fontSize = 14.sp,
+                        color = PureWhite,
                         fontWeight = FontWeight.Bold
                     )
                 }
             } else {
-                // Regular day
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF1E293B),
+                        fontSize = 14.sp,
+                        color = FigmaTextDark,
                         fontWeight = if (date == LocalDate.now()) FontWeight.Bold else FontWeight.Normal
                     )
                     
-                    // Tiny vibrant indicator dot for days with tours
                     if (hasTour && tourCount > 0) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Box(
                             modifier = Modifier
-                                .size(6.dp)
+                                .size(5.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF1976D2))
+                                .background(FigmaHeaderBlue)
                         )
                     }
                 }
@@ -621,7 +648,9 @@ fun TourneeCalendarDay(
     }
 }
 
-// 2. TIMELINE LAYOUT FOR STOPS & PREMIUM CARD DETAILS
+// ─────────────────────────────────────────────
+// Stops & Premium Card Details
+// ─────────────────────────────────────────────
 @Composable
 fun TripDetailCardRedesigned(
     trip: Trip,
@@ -710,28 +739,20 @@ fun TripDetailCardRedesigned(
         }
     }
     
-    val formattedDate = try {
-        if (tripDate.isNotEmpty()) {
-            val date = LocalDate.parse(tripDate.substring(0, 10))
-            DateTimeFormatter.ofPattern("dd MMMM yyyy").format(date)
-        } else "Date inconnue"
-    } catch (e: Exception) {
-        "Date inconnue"
+    val allCompleted = shipments.isNotEmpty() && shipments.all { 
+        it.status.uppercase() == "DELIVERED" || 
+        it.status.uppercase() == "COMPLETED"
     }
     
-    Card(
+    FigmaCard(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(2.dp, RoundedCornerShape(24.dp))
-            .clickable { onTripClick(tripId) },
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            .clickable(enabled = !allCompleted) { onTripClick(tripId) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
+                .padding(20.dp)
         ) {
             // Header with Trip # & Modern Pill Badges
             Row(
@@ -742,25 +763,25 @@ fun TripDetailCardRedesigned(
                 Column {
                     Text(
                         text = "Trip #$tripId",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF102A43)
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FigmaTextDark
                     )
                     if (tripIdentifier != null) {
                         Text(
                             text = tripIdentifier,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF627D98)
+                            fontSize = 13.sp,
+                            color = FigmaTextMuted
                         )
                     }
                 }
                 
-                // Redesigned Pill Badge
+                // Redesigned Pill Badge using Figma theme colors
                 val (bgColor, textColor, label) = when (status) {
-                    "COMPLETED" -> Triple(Color(0xFFE6F4EA), Color(0xFF137333), "Terminé")
-                    "IN_PROGRESS" -> Triple(Color(0xFFE8F0FE), Color(0xFF1A73E8), "En cours")
-                    "READY" -> Triple(Color(0xFFFEF7E0), Color(0xFFB06000), "Prêt")
-                    else -> Triple(Color(0xFFF1F3F4), Color(0xFF5F6368), status)
+                    "COMPLETED" -> Triple(FigmaGreen.copy(alpha = 0.1f), FigmaGreen, "Terminé")
+                    "IN_PROGRESS" -> Triple(FigmaHeaderBlue.copy(alpha = 0.1f), FigmaHeaderBlue, "En cours")
+                    "READY" -> Triple(FigmaAmber.copy(alpha = 0.1f), FigmaAmber, "Prêt")
+                    else -> Triple(FigmaLightGrey, FigmaTextDark, status)
                 }
                 
                 Surface(
@@ -769,10 +790,10 @@ fun TripDetailCardRedesigned(
                 ) {
                     Text(
                         text = label,
-                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = textColor,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
                     )
                 }
             }
@@ -790,17 +811,17 @@ fun TripDetailCardRedesigned(
                     Icon(
                         imageVector = Icons.Default.DirectionsCar,
                         contentDescription = "Véhicule",
-                        tint = Color(0xFF627D98),
-                        modifier = Modifier.size(20.dp)
+                        tint = FigmaTextMuted,
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
-                        Text("Véhicule", style = MaterialTheme.typography.bodySmall, color = Color(0xFF829AB1))
+                        Text("Véhicule", fontSize = 11.sp, color = FigmaTextMuted)
                         Text(
                             text = vehicle?.name ?: "ID: $vehicleId",
-                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF102A43)
+                            color = FigmaTextDark
                         )
                     }
                 }
@@ -810,17 +831,17 @@ fun TripDetailCardRedesigned(
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = "Driver",
-                        tint = Color(0xFF627D98),
-                        modifier = Modifier.size(20.dp)
+                        tint = FigmaTextMuted,
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
-                        Text("Chauffeur", style = MaterialTheme.typography.bodySmall, color = Color(0xFF829AB1))
+                        Text("Chauffeur", fontSize = 11.sp, color = FigmaTextMuted)
                         Text(
                             text = driver?.name ?: "ID: $driverId",
-                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF102A43)
+                            color = FigmaTextDark
                         )
                     }
                 }
@@ -828,12 +849,12 @@ fun TripDetailCardRedesigned(
             
             Spacer(modifier = Modifier.height(20.dp))
             
-            // 2. TIMELINE LAYOUT FOR STOPS
+            // Timeline for stops
             Text(
                 text = "Itinéraire & Livraisons",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF102A43)
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = FigmaTextDark
             )
             Spacer(modifier = Modifier.height(12.dp))
             
@@ -855,24 +876,24 @@ fun TripDetailCardRedesigned(
                         ) {
                             // Left side: Prominent ETA / Time
                             Column(
-                                modifier = Modifier.width(60.dp).padding(top = 4.dp),
+                                modifier = Modifier.width(56.dp).padding(top = 4.dp),
                                 horizontalAlignment = Alignment.End
                             ) {
                                 Text(
                                     text = "Stop ${index + 1}",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF829AB1)
+                                    color = FigmaTextMuted
                                 )
                                 Text(
                                     text = if (index == 0) "08:30" else if (index == 1) "10:15" else "11:45",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF102A43)
+                                    color = FigmaTextDark
                                 )
                             }
                             
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
                             
                             // Center: Visual indicator dot & connector line
                             Column(
@@ -884,27 +905,27 @@ fun TripDetailCardRedesigned(
                                         Icon(
                                             imageVector = Icons.Default.CheckCircle,
                                             contentDescription = "Fini",
-                                            tint = Color(0xFF137333),
-                                            modifier = Modifier.size(22.dp)
+                                            tint = FigmaGreen,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                     "ACTIVE" -> {
                                         Box(
                                             modifier = Modifier
-                                                .size(24.dp)
+                                                .size(22.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFF1A73E8))
+                                                .background(FigmaHeaderBlue)
                                                 .shadow(
-                                                    elevation = 8.dp,
+                                                    elevation = 4.dp,
                                                     shape = CircleShape,
-                                                    ambientColor = Color(0xFF1A73E8).copy(alpha = 0.4f),
-                                                    spotColor = Color(0xFF1A73E8).copy(alpha = 0.4f)
+                                                    ambientColor = FigmaHeaderBlue.copy(alpha = 0.3f),
+                                                    spotColor = FigmaHeaderBlue.copy(alpha = 0.3f)
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(12.dp)
+                                                    .size(10.dp)
                                                     .clip(CircleShape)
                                                     .background(Color.White)
                                             )
@@ -913,14 +934,14 @@ fun TripDetailCardRedesigned(
                                     else -> {
                                         Box(
                                             modifier = Modifier
-                                                .size(20.dp)
+                                                .size(18.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFFBDC1C6)),
+                                                .background(FigmaTextMuted.copy(alpha = 0.3f)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(14.dp)
+                                                    .size(12.dp)
                                                     .clip(CircleShape)
                                                     .background(Color.White)
                                             )
@@ -935,7 +956,7 @@ fun TripDetailCardRedesigned(
                                             .width(2.dp)
                                             .weight(1f)
                                             .background(
-                                                if (stopStatus == "FINISHED") Color(0xFF137333) else Color(0xFFE2E8F0)
+                                                if (stopStatus == "FINISHED") FigmaGreen else FigmaLightGrey
                                             )
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -950,23 +971,23 @@ fun TripDetailCardRedesigned(
                             ) {
                                 Text(
                                     text = shipment.shipmentNo ?: "N/A",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF102A43)
+                                    color = FigmaTextDark
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.LocationOn,
                                         contentDescription = null,
-                                        tint = Color(0xFF1976D2),
+                                        tint = FigmaHeaderBlue,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = shipment.deliveryCity ?: "Ville inconnue",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF627D98)
+                                        fontSize = 12.sp,
+                                        color = FigmaTextMuted
                                     )
                                 }
                             }
@@ -976,14 +997,14 @@ fun TripDetailCardRedesigned(
             } else if (!isLoadingShipments) {
                 Text(
                     text = "Aucune expédition associée.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF829AB1)
+                    fontSize = 13.sp,
+                    color = FigmaTextMuted
                 )
             }
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Redesigned Buttons
+            // Buttons matching Figma primary blue & outline style
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -993,8 +1014,12 @@ fun TripDetailCardRedesigned(
                         val tripDateFormatted = tripDate.substring(0, 10)
                         navController.navigate("delivery?date=$tripDateFormatted")
                     },
-                    modifier = Modifier.weight(1.5f).height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                    modifier = Modifier.weight(1.5f).height(48.dp),
+                    enabled = !allCompleted,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (allCompleted) Color.Gray else FigmaHeaderBlue,
+                        disabledContainerColor = Color.Gray
+                    ),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(
@@ -1003,27 +1028,50 @@ fun TripDetailCardRedesigned(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Démarrer", fontWeight = FontWeight.Bold)
+                    Text("Démarrer", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 
                 OutlinedButton(
                     onClick = {
                         navController.navigate("${Screen.TripDetail.route}/${tripId}")
                     },
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    border = BorderStroke(1.dp, FigmaTextMuted.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = FigmaTextDark)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = "Infos",
                         modifier = Modifier.size(18.dp),
-                        tint = Color(0xFF475569)
+                        tint = FigmaTextDark
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Infos", color = Color(0xFF475569), fontWeight = FontWeight.Bold)
+                    Text("Infos", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
+    }
+}
+
+// ─────────────────────────────────────────────
+// Figma White Card Container
+// ─────────────────────────────────────────────
+@Composable
+private fun FigmaCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .shadow(
+                elevation = 8.dp,
+                spotColor = FigmaShadowColor,
+                shape = RoundedCornerShape(24.dp)
+            )
+            .clip(RoundedCornerShape(24.dp))
+            .background(PureWhite)
+    ) {
+        content()
     }
 }

@@ -10,6 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,22 +31,58 @@ fun ShipmentDetailScreen(
 ) {
     val shipment = shipmentData.shipment
     val client = shipmentData.client
+    val PureWhite = Color(0xFFFFFFFF)
+    val FigmaShadowColor = Color(0xFF0C6BCE).copy(alpha = 0.10f)
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Détails du colis") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, spotColor = FigmaShadowColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
+                    ) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "Détails du colis",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(
+                                    onClick = onNavigateBack,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Retour",
+                                        tint = PureWhite
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = PureWhite
+                            )
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White,
-                    titleContentColor = Color.Black,
-                    navigationIconContentColor = Color.Black
-                )
-            )
+                }
+            }
         }
     ) { paddingValues ->
         Column(

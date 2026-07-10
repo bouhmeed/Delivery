@@ -2,6 +2,7 @@
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -386,18 +387,67 @@ private fun generateComplexTomTomUrl(delivery: DeliveryItem, waypoints: List<Way
 }
 
 /**
- * 🔗 OUVERTURE DE LA NAVIGATION
+ * 🔗 OUVERTURE DE LA NAVIGATION DANS L'APP TOMTOM
  */
 private fun openTomTomNavigation(context: Context, url: String) {
     try {
+        // Extraire les coordonnées de destination de l'URL
+        val destinationMatch = Regex("to=([^&]+)").find(url)
+        val coords = destinationMatch?.groupValues?.get(1)?.split(",")
+        
+        if (coords != null && coords.size >= 2) {
+            val destLat = coords[0].toDoubleOrNull()
+            val destLon = coords[1].toDoubleOrNull()
+            
+            if (destLat != null && destLon != null) {
+                // Essayer d'ouvrir l'application TomTom installée
+                val tomtomOpened = openTomTomAppWithDestination(context, destLat, destLon)
+                
+                if (tomtomOpened) {
+                    println("✅ Navigation TomTom ouverte dans l'application")
+                    return
+                }
+            }
+        }
+        
+        // Fallback: ouvrir l'URL dans le navigateur
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         context.startActivity(intent)
-        println("✅ Navigation TomTom ouverte avec succès")
+        println("✅ Navigation TomTom ouverte via navigateur")
     } catch (e: Exception) {
         println("❌ Erreur ouverture navigation TomTom: ${e.message}")
         // Fallback vers Google Maps
         openGoogleMapsFallback(context, url)
     }
+}
+
+/**
+ * 📱 Ouvrir l'application TomTom avec une destination
+ */
+private fun openTomTomAppWithDestination(context: Context, destLat: Double, destLon: Double): Boolean {
+    val packageManager = context.packageManager
+    
+    // Chercher l'app TomTom installée
+    val installedApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+    val tomtomApp = installedApps.find { 
+        it.packageName.lowercase().contains("tomtom") 
+    }
+    
+    if (tomtomApp != null) {
+        try {
+            // Utiliser un intent geo pour ouvrir TomTom avec les coordonnées
+            val geoUri = Uri.parse("geo:$destLat,$destLon?q=$destLat,$destLon")
+            val intent = Intent(Intent.ACTION_VIEW, geoUri)
+            intent.setPackage(tomtomApp.packageName)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            context.startActivity(intent)
+            return true
+        } catch (e: Exception) {
+            println("❌ Erreur ouverture TomTom app: ${e.message}")
+        }
+    }
+    
+    return false
 }
 
 private fun openGoogleMapsFallback(context: Context, originalUrl: String) {

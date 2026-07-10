@@ -10,27 +10,36 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons 
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import coil.compose.AsyncImage
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.content.Intent
+import android.content.pm.PackageManager
 import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import java.text.SimpleDateFormat
@@ -46,16 +55,34 @@ import com.example.delivery.viewmodel.home.HomeViewModel
 import com.example.delivery.viewmodel.home.HomeUiState
 import com.example.delivery.viewmodel.delivery.TodayTourViewModel
 import com.example.delivery.viewmodel.delivery.TodayTourState
-import com.example.delivery.viewmodel.delivery.ShipmentSearchViewModel
-import com.example.delivery.models.delivery.ShipmentSearchState
-import com.example.delivery.models.delivery.ShipmentSearchData
-import com.example.delivery.screens.components.ManualEntryDialog
-import com.example.delivery.screens.delivery.ShipmentDetailScreen
+import com.airbnb.lottie.compose.*
+
+// ─────────────────────────────────────────────
+// Palette "Logistics UI Kit" — cartes blanches, accent bleu unique, badges pill
+// ─────────────────────────────────────────────
+private val BgSoft            = Color(0xFFEAF2F8) // fond bleu ciel doux (comme Ma Tournée)
+private val PureWhite         = Color(0xFFFFFFFF)
+private val TextDark          = Color(0xFF1C2333)
+private val TextMuted         = Color(0xFF8A93A6)
+private val BorderSubtle      = Color(0xFFEAEEF5)
+
+// Header (inchangé)
+private val FigmaShadowColor  = Color(0xFF0C6BCE).copy(alpha = 0.10f)
+
+// Accent unique façon "Logistic & Shipping UI Kit"
+private val AccentBlue        = Color(0xFF2F6FED)
+private val AccentBlueDark    = Color(0xFF1E4FBF)
+private val AccentTeal        = Color(0xFF16C79A)
+private val AccentAmber       = Color(0xFFFF9F0A)
+private val AccentRed         = Color(0xFFFF4D4D)
+
+private val GradBlue          = Brush.linearGradient(listOf(AccentBlue, AccentBlueDark))
+private val ShadowSoft        = Color(0xFF1C2333).copy(alpha = 0.06f)
+private val ShadowBlue        = AccentBlue.copy(alpha = 0.20f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
-    // Authentication
     val context = LocalContext.current
     val authManager = remember { AuthManager(context) }
     val userEmail = authManager.getUserEmail()
@@ -64,10 +91,10 @@ fun HomeScreen(navController: NavController) {
     val homeViewModel: HomeViewModel = viewModel()
     val unreadCount by homeViewModel.unreadCount.collectAsStateWithLifecycle()
     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
-    
+
     val todayTourViewModel: TodayTourViewModel = viewModel()
 
-    // Trigger loading of today tour when driver info becomes available
+    // Liaison du driver ID
     LaunchedEffect((uiState as? HomeUiState.Success)?.driverInfo?.id) {
         val driverIdString = (uiState as? HomeUiState.Success)?.driverInfo?.id
         driverIdString?.toIntOrNull()?.let { id ->
@@ -76,10 +103,8 @@ fun HomeScreen(navController: NavController) {
     }
 
     val todayTourState by todayTourViewModel.todayTourState.collectAsStateWithLifecycle()
-    val shipmentSearchViewModel: ShipmentSearchViewModel = viewModel()
-    val shipmentSearchState by shipmentSearchViewModel.searchState.collectAsStateWithLifecycle()
 
-    // Load data when email becomes available
+    // Chargement initial
     LaunchedEffect(userEmail) {
         userEmail?.let { email ->
             homeViewModel.loadData(email)
@@ -87,465 +112,621 @@ fun HomeScreen(navController: NavController) {
         }
     }
 
-    // UI state for dialogs
-    var showManualEntryDialog by remember { mutableStateOf(false) }
-    var showShipmentDetail by remember { mutableStateOf(false) }
-    var selectedShipmentData: ShipmentSearchData? by remember { mutableStateOf(null) }
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Accueil",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF102A43) // deep navy blue
-                        )
-                    )
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            userEmail?.let { email ->
-                                homeViewModel.loadData(email)
-                                homeViewModel.loadUnreadCount()
-                            }
-                        },
-                        modifier = Modifier
-                            .padding(end = 8.dp)
-                            .shadow(elevation = 2.dp, shape = CircleShape)
-                            .background(
-                                color = Color.White, // floating white circular background
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            tint = Color(0xFF1976D2) // primary brand blue
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White, // white background as requested
-                    titleContentColor = Color(0xFF102A43)
-                )
-            )
-        },
+        containerColor = BgSoft,
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .background(BgSoft)
+                .padding(bottom = paddingValues.calculateBottomPadding()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // Top spacer for separation from TopAppBar
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // 2. Modern CurrentDayCard with glassmorphism effect
+            // ───────────────────────────────────────────────
+            // ── Header with Lottie animation (INCHANGÉ) ──
             item {
                 val successState = uiState as? HomeUiState.Success
                 val firstName = successState?.userInfo?.firstName ?: ""
                 val lastName = successState?.userInfo?.lastName ?: ""
-                val driverName = if (firstName.isNotEmpty() || lastName.isNotEmpty()) {
-                    "$firstName $lastName".trim()
-                } else {
-                    "Chauffeur"
-                }
+                val driverName = if (firstName.isNotEmpty() || lastName.isNotEmpty())
+                    "$firstName $lastName".trim() else "Chauffeur"
+
                 val todayDateString = remember {
-                    SimpleDateFormat("EEEE d MMMM yyyy", Locale.FRENCH).format(Date()).replaceFirstChar { it.uppercase() }
+                    SimpleDateFormat("EEEE d MMMM yyyy", Locale.FRENCH)
+                        .format(Date()).replaceFirstChar { it.uppercase() }
                 }
 
-                Card(
+                // Lottie composition loading from assets
+                val composition by rememberLottieComposition(LottieCompositionSpec.Asset("Fast Delivery.json"))
+                val progress by animateLottieCompositionAsState(
+                    composition = composition,
+                    iterations = LottieConstants.IterateForever,
+                    isPlaying = true
+                )
+
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                        .height(190.dp)
                         .shadow(
-                            elevation = 12.dp,
-                            spotColor = Color(0xFF1976D2).copy(alpha = 0.3f),
-                            ambientColor = Color(0xFF1976D2).copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(24.dp)
-                        ),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                            elevation = 8.dp,
+                            spotColor = FigmaShadowColor,
+                            shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
+                        )
+                        .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                        .statusBarsPadding()
                 ) {
+                    // Lottie animation as background
+                    LottieAnimation(
+                        composition = composition,
+                        progress = { progress },
+                        modifier = Modifier.matchParentSize()
+                    )
+
+                    // Gradient overlay for readability
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .matchParentSize()
                             .background(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        Color(0xFFE3F2FD), // very pale blue
-                                        Color(0xFFBBDEFB), // light blue
-                                        Color(0xFF90CAF9)  // medium light blue
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
                                     )
-                                ),
-                                shape = RoundedCornerShape(24.dp)
+                                )
                             )
-                            .padding(top = 32.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth()
+                        // Content overlay
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = "Bonjour,",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = Color(0xFF102A43).copy(alpha = 0.7f)
-                            )
-                            Text(
-                                text = driverName,
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = Color(0xFF102A43)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = todayDateString,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                color = Color(0xFF102A43).copy(alpha = 0.8f)
+                            // Left: Text content
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Greeting
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Bonjour,",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = PureWhite.copy(alpha = 0.8f)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = driverName,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PureWhite
+                                    )
+                                }
+
+                                // Date
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.CalendarToday,
+                                        contentDescription = null,
+                                        tint = PureWhite.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = todayDateString,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = PureWhite
+                                    )
+                                }
+                            }
+
+                            // Right: Company logo
+                            val configuration = LocalConfiguration.current
+                            val isTablet = configuration.screenWidthDp >= 600
+                            AsyncImage(
+                                model = "file:///android_asset/almatrack.png",
+                                contentDescription = "Almatrack Logo",
+                                modifier = Modifier.size(if (isTablet) 400.dp else 120.dp)
                             )
                         }
                     }
                 }
             }
 
-            // Loading / Error / Success Body content
+            // ───────────────────────────────────────────────
+            // ÉTATS : CHARGEMENT / ERREUR / SUCCÈS — nouveau style "moderne coloré"
+            // ───────────────────────────────────────────────
             when (uiState) {
                 is HomeUiState.Loading -> {
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(200.dp),
+                                .padding(horizontal = 16.dp)
+                                .height(200.dp)
+                                .shadow(10.dp, RoundedCornerShape(20.dp), spotColor = ShadowSoft)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(PureWhite),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator()
+                            CircularProgressIndicator(color = AccentBlue, strokeWidth = 3.dp)
                         }
                     }
                 }
+
                 is HomeUiState.Error -> {
                     val message = (uiState as HomeUiState.Error).message
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Error,
-                                    contentDescription = null,
-                                    tint = Color(0xFFD32F2F),
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "Erreur de chargement",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color(0xFFD32F2F)
-                                )
-                                Text(
-                                    text = message,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFFB71C1C)
-                                )
-                            }
-                        }
-                    }
-                }
-                is HomeUiState.Success -> {
-                    val data = uiState as HomeUiState.Success
-
-                    // 3. Elegant Soft-Amber Alert Banner (Replaces MaintenanceAlertCard)
-                    if (data.maintenanceAlert != null) {
-                        item {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFAF0)),
-                                border = BorderStroke(1.dp, Color(0xFFEA580C).copy(alpha = 0.2f))
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Warning,
-                                        contentDescription = "Warning",
-                                        tint = Color(0xFFEA580C),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Maintenance ${data.maintenanceAlert.type}",
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = Color(0xFFC2410C)
-                                        )
-                                        data.maintenanceAlert.vehicleName?.let { name ->
-                                            Text(
-                                                text = "$name • ${data.maintenanceAlert.registration ?: ""}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color(0xFFEA580C)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 4. Tournée du jour / Progress Hub
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
+                                .shadow(10.dp, RoundedCornerShape(20.dp), spotColor = ShadowSoft)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(PureWhite)
                         ) {
-                            when (val state = todayTourState) {
-                                is TodayTourState.Loading -> {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(24.dp),
-                                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                                        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(32.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            CircularProgressIndicator()
-                                        }
-                                    }
-                                }
-                                is TodayTourState.Success -> {
-                                    TodayTourCard(
-                                        tourInfo = state.tourInfo,
-                                        statistics = state.statistics,
-                                        navController = navController,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(24.dp)),
-                                        onStartTour = { navController.navigate("tournee") },
-                                        onViewDetails = { navController.navigate("tournee") },
-                                        onCompleteShipment = { /* TODO */ }
+                            Row(
+                                modifier = Modifier.padding(20.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .background(AccentRed.copy(alpha = 0.1f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.Error,
+                                        contentDescription = null,
+                                        tint = AccentRed,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
-                                is TodayTourState.NoTour -> {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(24.dp),
-                                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                                        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text(
+                                        "Erreur de chargement",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextDark
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        message,
+                                        fontSize = 13.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                is HomeUiState.Success -> {
+                    val data = uiState as HomeUiState.Success
+
+                    // ── Titre "Tournée en cours" — badge dégradé ──
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(9.dp))
+                                            .background(AccentBlue.copy(alpha = 0.12f)),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(32.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.LocalShipping,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(64.dp),
-                                                tint = Color(0xFF1976D2).copy(alpha = 0.2f)
+                                        Icon(
+                                            Icons.Default.Bolt,
+                                            contentDescription = null,
+                                            tint = AccentBlue,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "Tournée en cours",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextDark
+                                    )
+                                }
+                                Text(
+                                    text = "Aujourd'hui",
+                                    fontSize = 14.sp,
+                                    color = TextMuted,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(start = 40.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // ── Carte Tournée ──
+                    item {
+                        var isPressed by remember { mutableStateOf(false) }
+                        val composition by rememberLottieComposition(LottieCompositionSpec.Asset("Calender.json"))
+                        val progress by animateLottieCompositionAsState(
+                            composition = composition,
+                            iterations = LottieConstants.IterateForever,
+                            isPlaying = true
+                        )
+                        
+                        when (val state = todayTourState) {
+                            is TodayTourState.Loading -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                        .animateContentSize()
+                                        .alpha(if (isPressed) 0.7f else 1f)
+                                        .clickable { isPressed = true }
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .height(120.dp)
+                                ) {
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.matchParentSize()
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .background(
+                                                brush = Brush.verticalGradient(
+                                                    colors = listOf(
+                                                        AccentBlue.copy(alpha = 0.35f),
+                                                        AccentBlueDark.copy(alpha = 0.35f)
+                                                    )
+                                                )
                                             )
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            Text(
-                                                text = "Aucune tournée planifiée",
-                                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                                color = Color.Black
-                                            )
-                                            Text(
-                                                text = "Aucune livraison n'est prévue pour aujourd'hui",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = Color.Gray,
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
+                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = PureWhite,
+                                            strokeWidth = 3.dp,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = "Chargement de la tournée...",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = PureWhite
+                                        )
                                     }
                                 }
-                                is TodayTourState.Error -> {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
+                            }
+
+                            is TodayTourState.Success -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                        .animateContentSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                ) {
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.matchParentSize()
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .background(
+                                                brush = Brush.verticalGradient(
+                                                    colors = listOf(
+                                                        AccentBlue.copy(alpha = 0.35f),
+                                                        AccentBlueDark.copy(alpha = 0.35f)
+                                                    )
+                                                )
+                                            )
+                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .padding(20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        Column(
+                                        Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(20.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
+                                                .clickable { navController.navigate("tournee") }
+                                                .alpha(if (isPressed) 0.7f else 1f)
+                                                .padding(vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Error,
-                                                contentDescription = null,
-                                                tint = Color(0xFFD32F2F),
-                                                modifier = Modifier.size(48.dp)
-                                            )
-                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Bolt,
+                                                    contentDescription = null,
+                                                    tint = PureWhite,
+                                                    modifier = Modifier.size(28.dp)
+                                                )
+                                                Text(
+                                                    text = "Tournée du jour",
+                                                    fontSize = 20.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = PureWhite
+                                                )
+                                            }
                                             Text(
-                                                text = "Erreur de la tournée",
-                                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFFD32F2F)
-                                            )
-                                            Text(
-                                                text = state.message,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = Color(0xFFB71C1C)
+                                                text = "En cours",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PureWhite
                                             )
                                         }
+                                        TodayTourCard(
+                                            tourInfo   = state.tourInfo,
+                                            statistics = state.statistics,
+                                            navController = navController,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onStartTour        = { navController.navigate("tournee") },
+                                            onViewDetails      = { navController.navigate("tournee") },
+                                            onCompleteShipment = { /* TODO */ }
+                                        )
+                                    }
+                                }
+                            }
+
+                            is TodayTourState.NoTour -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                        .clickable { navController.navigate("tournee") }
+                                        .alpha(if (isPressed) 0.7f else 1f)
+                                        .animateContentSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .height(140.dp)
+                                ) {
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.matchParentSize()
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .background(
+                                                brush = Brush.verticalGradient(
+                                                    colors = listOf(
+                                                        AccentBlue.copy(alpha = 0.35f),
+                                                        AccentBlueDark.copy(alpha = 0.35f)
+                                                    )
+                                                )
+                                            )
+                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.LocalShipping,
+                                            contentDescription = null,
+                                            tint = PureWhite,
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "Aucune tournée planifiée",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = PureWhite
+                                        )
+                                        Text(
+                                            text = "Aucune livraison n'est prévue pour aujourd'hui",
+                                            fontSize = 14.sp,
+                                            color = PureWhite.copy(alpha = 0.9f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            is TodayTourState.Error -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                                        .clickable { todayTourViewModel.refresh() }
+                                        .alpha(if (isPressed) 0.7f else 1f)
+                                        .animateContentSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .height(140.dp)
+                                ) {
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.matchParentSize()
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .background(
+                                                brush = Brush.verticalGradient(
+                                                    colors = listOf(
+                                                        AccentRed.copy(alpha = 0.35f),
+                                                        AccentRed.copy(alpha = 0.35f)
+                                                    )
+                                                )
+                                            )
+                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Error,
+                                            contentDescription = null,
+                                            tint = PureWhite,
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "Erreur de chargement",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = PureWhite
+                                        )
+                                        Text(
+                                            text = state.message,
+                                            fontSize = 14.sp,
+                                            color = PureWhite.copy(alpha = 0.9f)
+                                        )
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Vehicle Maintenance Section
-                    if (data.vehicleMaintenance.isNotEmpty()) {
+                    // ── Alerte maintenance ──
+                    if (data.maintenanceAlert != null) {
                         item {
+                            var isPressed by remember { mutableStateOf(false) }
+                            val composition by rememberLottieComposition(LottieCompositionSpec.Asset("Gears Lottie Animation.json"))
+                            val progress by animateLottieCompositionAsState(
+                                composition = composition,
+                                iterations = LottieConstants.IterateForever,
+                                isPlaying = true
+                            )
+                            
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
+                                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                                    .animateContentSize()
+                                    .clickable { /* Navigate to maintenance details */ }
+                                    .alpha(if (isPressed) 0.7f else 1f)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .height(160.dp)
                             ) {
-                                VehicleMaintenanceSection(
-                                    maintenance = data.vehicleMaintenance
+                                LottieAnimation(
+                                    composition = composition,
+                                    progress = { progress },
+                                    modifier = Modifier.matchParentSize()
                                 )
-                            }
-                        }
-                    }
-
-                    // 5. Quick Actions Card (Keep modern look but optimized for standard quick search layout)
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp)
-                            ) {
-                                Text(
-                                    text = "Rechercher une Expédition",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF1976D2)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = { showManualEntryDialog = true },
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(64.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF1976D2)
-                                    ),
-                                    shape = RoundedCornerShape(16.dp)
+                                        .matchParentSize()
+                                        .background(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    AccentBlue.copy(alpha = 0.35f),
+                                                    AccentBlueDark.copy(alpha = 0.35f)
+                                                )
+                                            )
+                                        )
+                                )
+                                Column(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .padding(20.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Row(
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.QrCodeScanner,
-                                            contentDescription = "Entrée manuelle",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
+                                            Icons.Default.Warning,
+                                            contentDescription = "Warning",
+                                            tint = AccentBlue,
+                                            modifier = Modifier.size(32.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Maintenance ${data.maintenanceAlert.type}",
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PureWhite
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Urgent",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PureWhite
+                                            )
+                                        }
+                                    }
+                                    data.maintenanceAlert.vehicleName?.let { name ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.padding(start = 44.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.LocalShipping,
+                                                contentDescription = null,
+                                                tint = PureWhite.copy(alpha = 0.9f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = "$name • ${data.maintenanceAlert.registration ?: ""}",
+                                                fontSize = 15.sp,
+                                                color = PureWhite.copy(alpha = 0.9f)
+                                            )
+                                        }
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.padding(start = 44.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.CalendarToday,
+                                            contentDescription = null,
+                                            tint = PureWhite.copy(alpha = 0.9f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                         Text(
-                                            text = "Entrer Manuellement / Scanner",
-                                            color = Color.White,
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                            text = "Date : ${data.maintenanceAlert.nextDate ?: "Non définie"}",
+                                            fontSize = 15.sp,
+                                            color = PureWhite.copy(alpha = 0.9f)
                                         )
                                     }
                                 }
                             }
                         }
                     }
-                    
-                    // Extra bottom padding
-                    item {
-                        Spacer(modifier = Modifier.height(24.dp))
-                    }
+
+
+                    item { Spacer(modifier = Modifier.height(20.dp)) }
                 }
             }
         }
-    }
-
-    // Shipment search handling
-    LaunchedEffect(shipmentSearchState) {
-        when (val current = shipmentSearchState) {
-            is ShipmentSearchState.Success -> {
-                selectedShipmentData = current.data
-                showShipmentDetail = true
-                showManualEntryDialog = false
-            }
-            is ShipmentSearchState.Error -> {
-                coroutineScope.launch { snackbarHostState.showSnackbar(current.message) }
-                showManualEntryDialog = false
-            }
-            else -> {}
-        }
-    }
-
-    if (showManualEntryDialog) {
-        ManualEntryDialog(
-            isVisible = showManualEntryDialog,
-            onClose = {
-                showManualEntryDialog = false
-                shipmentSearchViewModel.clearSearchState()
-            },
-            onSearch = { barcode -> shipmentSearchViewModel.searchManually(barcode) },
-            isLoading = shipmentSearchState is ShipmentSearchState.Loading
-        )
-    }
-
-    if (showShipmentDetail && selectedShipmentData != null) {
-        ShipmentDetailScreen(
-            shipmentData = selectedShipmentData!!,
-            onNavigateBack = {
-                showShipmentDetail = false
-                selectedShipmentData = null
-                shipmentSearchViewModel.clearSearchState()
-            },
-            onMarkAsDelivered = {
-                selectedShipmentData?.let { data ->
-                    shipmentSearchViewModel.markAsDelivered(data.shipment.id)
-                }
-            },
-            onNavigate = { /* TODO: GPS navigation */ },
-            navController = navController
-        )
     }
 }

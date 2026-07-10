@@ -158,6 +158,7 @@ class DirectShipmentDetailRepository {
             
             // 8. Get DeliveryProof
             var deliveryProof: DeliveryProof? = null
+            var deliveryImages: List<DeliveryImage> = emptyList()
             val proofQuery = """
                 SELECT id, "imageUrl", "signatureUrl", "createdAt" 
                 FROM "ShipmentProof" 
@@ -166,12 +167,67 @@ class DirectShipmentDetailRepository {
             """.trimIndent()
             val proofJson = JSONObject(DatabaseManager.executeQuery(proofQuery)).optJSONArray("rows")?.optJSONObject(0)
             if (proofJson != null) {
+                val proofId = proofJson.optInt("id")
                 deliveryProof = DeliveryProof(
-                    id = proofJson.optInt("id"),
+                    id = proofId,
                     imageUrl = getNullableString(proofJson, "imageUrl"),
                     signatureUrl = getNullableString(proofJson, "signatureUrl"),
                     createdAt = getNullableString(proofJson, "createdAt")
                 )
+                
+                // 8.5. Get DeliveryImages linked to this proof
+                if (proofId > 0) {
+                    val imagesQuery = """
+                        SELECT id, "gedDocId", url, "documentType", "proofId", "createdAt"
+                        FROM "DeliveryImage" 
+                        WHERE "proofId" = '$proofId'
+                    """.trimIndent()
+                    val imagesJsonArray = JSONObject(DatabaseManager.executeQuery(imagesQuery)).optJSONArray("rows")
+                    if (imagesJsonArray != null && imagesJsonArray.length() > 0) {
+                        val imagesList = mutableListOf<DeliveryImage>()
+                        for (i in 0 until imagesJsonArray.length()) {
+                            val imgRow = imagesJsonArray.getJSONObject(i)
+                            imagesList.add(
+                                DeliveryImage(
+                                    id = getNullableString(imgRow, "id") ?: "",
+                                    gedDocId = getNullableString(imgRow, "gedDocId") ?: "",
+                                    url = getNullableString(imgRow, "url") ?: "",
+                                    documentType = getNullableString(imgRow, "documentType") ?: "PHOTO_DELIVERY",
+                                    proofId = getNullableString(imgRow, "proofId") ?: "",
+                                    createdAt = getNullableString(imgRow, "createdAt") ?: ""
+                                )
+                            )
+                        }
+                        deliveryImages = imagesList
+                    }
+                }
+            }
+            
+            // 9. Get ShipmentReturns (for return/empty photos)
+            var returnProofUrl: String? = null
+            val returnsQuery = """
+                SELECT "proofimageurl" 
+                FROM "ShipmentReturns" 
+                WHERE "shipmentid" = $shipmentId 
+                LIMIT 1
+            """.trimIndent()
+            val returnsJson = JSONObject(DatabaseManager.executeQuery(returnsQuery)).optJSONArray("rows")?.optJSONObject(0)
+            if (returnsJson != null) {
+                returnProofUrl = getNullableString(returnsJson, "proofimageurl")
+                println("🔍 DEBUG: Found return proof URL with length: ${returnProofUrl?.length}")
+                // Add return photo as a delivery image if it exists
+                if (!returnProofUrl.isNullOrEmpty()) {
+                    val returnImage = DeliveryImage(
+                        id = "return_${shipmentId}",
+                        gedDocId = "",
+                        url = returnProofUrl,
+                        documentType = "RETURN_PROOF",
+                        proofId = "return",
+                        createdAt = ""
+                    )
+                    deliveryImages = deliveryImages + returnImage
+                    println("🔍 DEBUG: Added return photo to deliveryImages. Total images: ${deliveryImages.size}")
+                }
             }
             
             val shipmentDetail = ShipmentDetailFull(
@@ -212,7 +268,7 @@ class DirectShipmentDetailRepository {
                 driver = driver,
                 vehicle = vehicle,
                 trip = trip,
-                deliveryImages = emptyList(),
+                deliveryImages = deliveryImages,
                 deliveryDocuments = emptyList(),
                 deliveryProof = deliveryProof
             )

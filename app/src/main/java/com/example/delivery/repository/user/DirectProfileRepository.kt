@@ -21,7 +21,7 @@ class DirectProfileRepository {
             
             // 1. Fetch Driver
             val driverQuery = """
-                SELECT id, name, "licenseNumber", "licenseExpiry", "employmentType", 
+                SELECT id, "licenseNumber", "licenseExpiry", "employmentType", 
                        "contractHoursWeek", "homeDepotId", "tenantId", status, address,
                        "assignedVehicle", city, country, "createdAt", "dateOfBirth",
                        email, "hireDate", phone, "postalCode", salary, "updatedAt"
@@ -37,7 +37,7 @@ class DirectProfileRepository {
             
             val profile = DriverProfile(
                 id = dJson.getInt("id"),
-                name = dJson.getString("name"),
+                name = "Driver", // Default name since column doesn't exist
                 firstName = null,
                 lastName = null,
                 licenseNumber = getNullableString(dJson, "licenseNumber"),
@@ -220,9 +220,8 @@ class DirectProfileRepository {
             Log.d(TAG, "🔄 updateDriverProfile: driverId=$driverId, name=$fullName, phone=${profile.phone}, email=${profile.email}, address=${profile.address}")
             
             val updateQuery = """
-                UPDATE "Driver" 
-                SET 
-                    name = '${fullName}',
+                UPDATE "Driver"
+                SET
                     phone = ${if (profile.phone != null) "'${profile.phone}'" else "phone"},
                     email = ${if (profile.email != null) "'${profile.email}'" else "email"},
                     address = ${if (profile.address != null) "'${profile.address}'" else "address"},

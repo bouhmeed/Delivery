@@ -2,6 +2,8 @@ package com.example.delivery.screens.history
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +51,17 @@ import kotlinx.coroutines.launch
 import java.net.SocketTimeoutException
 import java.net.ConnectException
 import java.net.UnknownHostException
+
+// ─────────────────────────────────────────────
+// Figma UI Kit Color Palette
+// ─────────────────────────────────────────────
+private val FigmaBg           = Color(0xFFEAF2F8)
+private val PureWhite         = Color(0xFFFFFFFF)
+private val FigmaHeaderBlue   = Color(0xFF0C6BCE)
+private val FigmaTextDark     = Color(0xFF1B2A4A)
+private val FigmaTextMuted    = Color(0xFF8F9BB3)
+private val FigmaShadowColor  = Color(0xFF0C6BCE).copy(alpha = 0.08f)
+private val FigmaLightGrey    = Color(0xFFF1F5F9)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,18 +141,72 @@ fun NewHistoryScreen(
     }
     
     Scaffold(
+        containerColor = FigmaBg,
         topBar = {
-            CommonTopAppBar(
-                title = "Historique",
-                showBack = true,
-                onBack = { navController.popBackStack() },
-                showRefresh = true,
-                onRefresh = {
-                    userEmail?.let { email ->
-                        viewModel.loadHistoryData(email)
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, spotColor = FigmaShadowColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
+                    ) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "Historique",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(
+                                    onClick = { navController.popBackStack() },
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = PureWhite
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(
+                                    onClick = {
+                                        userEmail?.let { email ->
+                                            viewModel.loadHistoryData(email)
+                                        }
+                                    },
+                                    modifier = Modifier.padding(end = 4.dp).size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Refresh,
+                                        contentDescription = "Refresh",
+                                        tint = PureWhite,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = PureWhite
+                            )
+                        )
                     }
                 }
-            )
+            }
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
@@ -214,12 +282,17 @@ fun NewHistoryScreen(
                     
                     // History list
                     driverHistory?.history?.let { history ->
+                        // Filter out TO_PLAN shipments from history
+                        val filteredHistory = history.filter { delivery ->
+                            delivery.shipmentStatus?.uppercase() != "TO_PLAN"
+                        }
+                        
                         // Filter history based on search query
                         val searchFilteredHistory = if (searchQuery.isBlank()) {
-                            history
+                            filteredHistory
                         } else {
                             val query = searchQuery.lowercase()
-                            history.filter { delivery ->
+                            filteredHistory.filter { delivery ->
                                 delivery.shipmentNumber?.lowercase()?.contains(query) == true ||
                                 delivery.clientName?.lowercase()?.contains(query) == true ||
                                 delivery.originName?.lowercase()?.contains(query) == true ||
@@ -409,7 +482,11 @@ fun DriverStatsCard(stats: DriverStatsInfo) {
                     
                     NewStatItem(
                         label = "Succès",
-                        value = "${(stats.completedTrips.toFloat() / stats.totalTrips * 100).toInt()}%",
+                        value = if (stats.totalTrips > 0) {
+                            "${(stats.completedTrips.toFloat() / stats.totalTrips * 100).toInt()}%"
+                        } else {
+                            "0%"
+                        },
                         icon = Icons.Default.Percent,
                         color = Color(0xFF9C27B0)
                     )
@@ -827,16 +904,20 @@ fun StatusChip(status: String?) {
         else -> Color(0xFF9E9E9E) to (status ?: "Inconnu")
     }
     
+    // Calculate font size based on text length to prevent small display
+    val fontSize = if (text.length > 10) 10.sp else 12.sp
+    
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = color
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             color = Color.White,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            fontSize = fontSize,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
         )
     }
 }

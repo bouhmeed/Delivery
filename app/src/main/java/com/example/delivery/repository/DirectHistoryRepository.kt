@@ -57,6 +57,7 @@ class DirectHistoryRepository {
                 LEFT JOIN "Driver" d ON t."driverId" = d.id
                 WHERE t."driverId" = ${driverId}
                   AND t."tripDate" <= CURRENT_DATE
+                  AND t.status = 'COMPLETED'
                 ORDER BY t."tripDate" DESC, tsl.sequence ASC
                 LIMIT ${limit} OFFSET ${offset}
             """.trimIndent()
@@ -107,6 +108,7 @@ class DirectHistoryRepository {
                 FROM "Trip" t
                 WHERE t."driverId" = ${driverId}
                   AND t."tripDate" <= CURRENT_DATE
+                  AND t.status = 'COMPLETED'
             """.trimIndent()
             
             val countArray = JSONObject(DatabaseManager.executeQuery(countQuery)).optJSONArray("rows")
@@ -129,7 +131,7 @@ class DirectHistoryRepository {
         }
     }
 
-    suspend fun getDriverStats(driverId: Int, periodDays: Int = 30): Result<DriverStats> = withContext(Dispatchers.IO) {
+    suspend fun getDriverStats(driverId: Int, periodDays: Int = 365): Result<DriverStats> = withContext(Dispatchers.IO) {
         try {
             // Get driver statistics
             val statsQuery = """
@@ -149,7 +151,7 @@ class DirectHistoryRepository {
                 LEFT JOIN "TripShipmentLink" tsl ON t.id = tsl."tripId"
                 LEFT JOIN "Shipment" s ON tsl."shipmentId" = s.id
                 WHERE t."driverId" = ${driverId} 
-                  AND t."tripDate" >= CURRENT_DATE - INTERVAL '${periodDays} days'
+                  AND t."tripDate" <= CURRENT_DATE
             """ .trimIndent()
 
             val statsArray = JSONObject(DatabaseManager.executeQuery(statsQuery)).optJSONArray("rows")
@@ -209,7 +211,7 @@ class DirectHistoryRepository {
                 LEFT JOIN "TripShipmentLink" tsl ON t.id = tsl."tripId"
                 LEFT JOIN "Shipment" s ON tsl."shipmentId" = s.id
                 WHERE t."driverId" = ${driverId} 
-                  AND t."tripDate" >= CURRENT_DATE - INTERVAL '6 months'
+                  AND t."tripDate" <= CURRENT_DATE
                 GROUP BY TO_CHAR(t."tripDate", 'YYYY-MM')
                 ORDER BY month DESC
             """.trimIndent()

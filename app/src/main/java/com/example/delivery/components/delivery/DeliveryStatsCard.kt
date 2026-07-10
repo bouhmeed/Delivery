@@ -1,4 +1,4 @@
-﻿package com.example.delivery.components
+package com.example.delivery.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background

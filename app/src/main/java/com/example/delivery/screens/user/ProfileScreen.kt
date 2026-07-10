@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import android.widget.Toast
 import kotlinx.coroutines.launch
@@ -47,6 +48,17 @@ import com.example.delivery.ui.theme.FineWhiteDeliveryTheme
 import com.example.delivery.ui.theme.FineWhiteThemeExtensions
 import com.example.delivery.viewmodel.user.ProfileUiState
 import com.example.delivery.viewmodel.user.ProfileViewModel
+
+// ─────────────────────────────────────────────
+// Figma UI Kit Color Palette
+// ─────────────────────────────────────────────
+private val FigmaBg           = Color(0xFFEAF2F8)
+private val PureWhite         = Color(0xFFFFFFFF)
+private val FigmaHeaderBlue   = Color(0xFF0C6BCE)
+private val FigmaTextDark     = Color(0xFF1B2A4A)
+private val FigmaTextMuted    = Color(0xFF8F9BB3)
+private val FigmaShadowColor  = Color(0xFF0C6BCE).copy(alpha = 0.08f)
+private val FigmaLightGrey    = Color(0xFFF1F5F9)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,58 +105,120 @@ fun ProfileScreen(
     }
     
     Scaffold(
+        containerColor = FigmaBg,
         topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFEBF4FF))
-            ) {
-                CommonTopAppBar(
-                    title = "Mon Profil",
-                    showBack = true,
-                    onBack = { navController.popBackStack() },
-                    actions = {
-                        IconButton(
-                            onClick = {
-                                if (isEditing) {
-                                    // Save logic when in edit mode
-                                    currentProfile?.let { profile ->
-                                        val updatedProfile = profile.copy(
-                                            firstName = editableFirstName.ifBlank { profile.firstName },
-                                            lastName = editableLastName.ifBlank { profile.lastName },
-                                            phone = editablePhone.ifBlank { profile.phone },
-                                            email = editableEmail.ifBlank { profile.email },
-                                            address = editableAddress.ifBlank { profile.address }
-                                        )
-                                        viewModel.updateProfile(
-                                            profile.id.toString(),
-                                            updatedProfile
-                                        ) { success, error ->
-                                            if (success) {
-                                                Toast.makeText(context, "Profil mis à jour", Toast.LENGTH_SHORT).show()
-                                                isEditing = false
-                                                updateErrorMessage = null
-                                                // Reload data to reflect changes
-                                                userEmail?.let { email -> viewModel.loadProfileData(email) }
-                                            } else {
-                                                updateErrorMessage = error
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    // Toggle edit mode
-                                    isEditing = true
-                                }
-                            }
-                        ) {
-                            Icon(
-                                if (isEditing) Icons.Default.Save else Icons.Default.Edit,
-                                contentDescription = if (isEditing) "Sauvegarder" else "Modifier",
-                                tint = Color(0xFF102A43)
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, spotColor = FigmaShadowColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
+                                    )
+                                )
                             )
-                        }
+                    ) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "Mon Profil",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(
+                                    onClick = { navController.popBackStack() },
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = PureWhite
+                                    )
+                                }
+                            },
+                            actions = {
+                                // Logout button
+                                IconButton(
+                                    onClick = {
+                                        authManager.logout(
+                                            onSuccess = {
+                                                Toast.makeText(context, "Déconnexion réussie", Toast.LENGTH_SHORT).show()
+                                                navController.navigate(Screen.Login.route) {
+                                                    popUpTo(0) { inclusive = true }
+                                                }
+                                            },
+                                            onFailure = { error ->
+                                                Toast.makeText(context, "Erreur: ${error.message}", Toast.LENGTH_LONG).show()
+                                            }
+                                        )
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Logout,
+                                        contentDescription = "Déconnexion",
+                                        tint = PureWhite
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        if (isEditing) {
+                                            // Save logic when in edit mode
+                                            currentProfile?.let { profile ->
+                                                val updatedProfile = profile.copy(
+                                                    firstName = editableFirstName.ifBlank { profile.firstName },
+                                                    lastName = editableLastName.ifBlank { profile.lastName },
+                                                    phone = editablePhone.ifBlank { profile.phone },
+                                                    email = editableEmail.ifBlank { profile.email },
+                                                    address = editableAddress.ifBlank { profile.address }
+                                                )
+                                                viewModel.updateProfile(
+                                                    profile.id.toString(),
+                                                    updatedProfile
+                                                ) { success, error ->
+                                                    if (success) {
+                                                        Toast.makeText(context, "Profil mis à jour", Toast.LENGTH_SHORT).show()
+                                                        isEditing = false
+                                                        updateErrorMessage = null
+                                                        // Reload data to reflect changes
+                                                        userEmail?.let { email -> viewModel.loadProfileData(email) }
+                                                    } else {
+                                                        updateErrorMessage = error
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Toggle edit mode
+                                            isEditing = true
+                                        }
+                                    },
+                                    modifier = Modifier.padding(end = 4.dp).size(36.dp)
+                                ) {
+                                    Icon(
+                                        if (isEditing) Icons.Default.Save else Icons.Default.Edit,
+                                        contentDescription = if (isEditing) "Sauvegarder" else "Modifier",
+                                        tint = PureWhite,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = PureWhite
+                            )
+                        )
                     }
-                )
+                }
             }
         },
         bottomBar = { BottomNavigationBar(navController) }

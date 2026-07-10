@@ -134,6 +134,10 @@ class DeliveryTrackingViewModel : ViewModel() {
      */
     fun refresh(driverId: Int) {
         _isRefreshing.value = true
+        // Clear current state to force reload
+        _tripWithDeliveriesState.value = TripWithDeliveriesState.Loading
+        _filteredDeliveries.value = emptyList()
+        
         viewModelScope.launch {
             repository.getTripForDate(driverId, _selectedDate.value.format(dateFormatter)).collect { result ->
                 when (result) {
@@ -145,7 +149,7 @@ class DeliveryTrackingViewModel : ViewModel() {
                         _tripWithDeliveriesState.value = TripWithDeliveriesState.Error(result.message)
                     }
                     is Result.Loading -> {
-                        // Don't change state to loading during refresh
+                        // Don't change state to loading during refresh (already set above)
                     }
                 }
                 _isRefreshing.value = false
@@ -454,7 +458,7 @@ data class FilterState(
     val selectedStatuses: Set<String> = emptySet(),
     val selectedTypes: Set<String> = emptySet(),
     val customerQuery: String = "",
-    val sortBy: SortOption = SortOption.SEQUENCE,
+    val sortBy: SortOption = SortOption.DISTANCE,
     val sortOrder: SortOrder = SortOrder.ASC
 )
 

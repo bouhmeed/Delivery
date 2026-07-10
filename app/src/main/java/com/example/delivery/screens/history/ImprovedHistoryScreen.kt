@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.navigation.Screen
@@ -122,43 +124,99 @@ fun ImprovedHistoryScreen(navController: NavController) {
         }
     }
     
+    val PureWhite = Color(0xFFFFFFFF)
+    val FigmaShadowColor = Color(0xFF0C6BCE).copy(alpha = 0.10f)
+    
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Historique Organisé") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showFilters = !showFilters }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "Filtres")
-                    }
-                    IconButton(
-                        onClick = {
-                            userInfo?.driverId?.let { driverId ->
-                                coroutineScope.launch {
-                                    isLoading = true
-                                    errorMessage = null
-                                    
-                                    loadDriverHistory(historyApi, driverId, { history ->
-                                        driverHistory = history
-                                    }, { error -> errorMessage = error })
-                                    
-                                    loadDriverStats(historyApi, driverId, { stats ->
-                                        driverStats = stats
-                                    }, { error -> errorMessage = error })
-                                    
-                                    isLoading = false
-                                }
-                            }
-                        }
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, spotColor = FigmaShadowColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF05204A).copy(alpha = 0.85f),
+                                        Color(0xFF084A9E).copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Actualiser")
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "Historique Organisé",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(
+                                    onClick = { navController.popBackStack() },
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Retour",
+                                        tint = PureWhite
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(
+                                    onClick = { showFilters = !showFilters },
+                                    modifier = Modifier.padding(end = 4.dp).size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.FilterList,
+                                        contentDescription = "Filtres",
+                                        tint = PureWhite,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        userInfo?.driverId?.let { driverId ->
+                                            coroutineScope.launch {
+                                                isLoading = true
+                                                errorMessage = null
+                                                
+                                                loadDriverHistory(historyApi, driverId, { history ->
+                                                    driverHistory = history
+                                                }, { error -> errorMessage = error })
+                                                
+                                                loadDriverStats(historyApi, driverId, { stats ->
+                                                    driverStats = stats
+                                                }, { error -> errorMessage = error })
+                                                
+                                                isLoading = false
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.padding(end = 4.dp).size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = "Actualiser",
+                                        tint = PureWhite,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = PureWhite
+                            )
+                        )
                     }
                 }
-            )
+            }
         },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
