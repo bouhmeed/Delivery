@@ -33,6 +33,7 @@ import com.example.delivery.auth.AuthManager
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.components.CommonTopAppBar
 import com.example.delivery.components.VehicleMaintenanceSection
+import com.example.delivery.models.user.AddressInfo
 import com.example.delivery.models.user.DepotInfo
 import com.example.delivery.models.user.DriverProfile
 import com.example.delivery.models.user.DriverStatsSummary
@@ -81,7 +82,6 @@ fun ProfileScreen(
     // Editable state lifted to parent for TopAppBar Save button access
     var editablePhone by remember { mutableStateOf("") }
     var editableEmail by remember { mutableStateOf("") }
-    var editableAddress by remember { mutableStateOf("") }
     var editableFirstName by remember { mutableStateOf("") }
     var editableLastName by remember { mutableStateOf("") }
     
@@ -96,11 +96,8 @@ fun ProfileScreen(
         currentProfile?.let {
             editablePhone = it.phone ?: ""
             editableEmail = it.email ?: ""
-            editableAddress = it.address ?: ""
-            // Split name into firstName and lastName
-            val nameParts = it.name.split(" ", limit = 2)
-            editableFirstName = nameParts.getOrNull(0) ?: ""
-            editableLastName = nameParts.getOrNull(1) ?: ""
+            editableFirstName = it.firstName
+            editableLastName = it.lastName
         }
     }
     
@@ -179,8 +176,7 @@ fun ProfileScreen(
                                                     firstName = editableFirstName.ifBlank { profile.firstName },
                                                     lastName = editableLastName.ifBlank { profile.lastName },
                                                     phone = editablePhone.ifBlank { profile.phone },
-                                                    email = editableEmail.ifBlank { profile.email },
-                                                    address = editableAddress.ifBlank { profile.address }
+                                                    email = editableEmail.ifBlank { profile.email }
                                                 )
                                                 viewModel.updateProfile(
                                                     profile.id.toString(),
@@ -292,12 +288,12 @@ fun ProfileScreen(
                                 isEditing = isEditing,
                                 editablePhone = editablePhone,
                                 editableEmail = editableEmail,
-                                editableAddress = editableAddress,
+                                editableAddress = "",
                                 editableFirstName = editableFirstName,
                                 editableLastName = editableLastName,
                                 onPhoneChange = { editablePhone = it },
                                 onEmailChange = { editableEmail = it },
-                                onAddressChange = { editableAddress = it },
+                                onAddressChange = { },
                                 onFirstNameChange = { editableFirstName = it },
                                 onLastNameChange = { editableLastName = it }
                             )
@@ -311,10 +307,10 @@ fun ProfileScreen(
                         }
                     }
                     
-                    // Depot Information Card
-                    profileResponse?.depot?.let { depot ->
+                    // Address Information Card
+                    profileResponse?.address?.let { address ->
                         item {
-                            DepotInfoCard(depot = depot)
+                            AddressInfoCard(address = address)
                         }
                     }
                     
@@ -367,13 +363,11 @@ fun ProfileHeaderCard(
     onFirstNameChange: (String) -> Unit,
     onLastNameChange: (String) -> Unit
 ) {
-    var editableName by remember { mutableStateOf(profile.name) }
-    
     // Debug logging
     println("🔍 DEBUG EMAIL - userEmail: $userEmail")
     println("🔍 DEBUG EMAIL - profile.email: ${profile.email}")
     println("🔍 DEBUG EMAIL - editableEmail: $editableEmail")
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -423,7 +417,7 @@ fun ProfileHeaderCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = editableName,
+                        text = if (isEditing) "$editableFirstName $editableLastName" else "${profile.firstName} ${profile.lastName}",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF102A43)
@@ -488,7 +482,7 @@ fun ProfileHeaderCard(
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.primary
                 )
-                
+
                 // Email
                 CompactInfoItem(
                     icon = Icons.Default.Email,
@@ -498,16 +492,7 @@ fun ProfileHeaderCard(
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
-            
-            // Address
-            CompactInfoItem(
-                icon = Icons.Default.LocationOn,
-                label = "Adresse",
-                value = profile.address ?: "Non spécifié",
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.tertiary
-            )
-            
+
             // Professional Info Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -520,7 +505,7 @@ fun ProfileHeaderCard(
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.primary
                 )
-                
+
                 CompactInfoItem(
                     icon = Icons.Default.WorkspacePremium,
                     label = "Contrat",
@@ -582,13 +567,7 @@ fun ProfileHeaderCard(
                             enabled = false
                         )
                         
-                        SlimOutlinedTextField(
-                            icon = Icons.Default.LocationOn,
-                            label = "Adresse",
-                            value = editableAddress,
-                            onValueChange = onAddressChange
-                        )
-                        
+
                         Spacer(modifier = Modifier.height(8.dp))
                         
                         Text(
@@ -841,7 +820,7 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                         modifier = Modifier.size(24.dp)
                     )
                 }
-                
+
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
@@ -852,34 +831,34 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                         color = Color(0xFF102A43)
                     )
                     Text(
-                        text = vehicle.name,
+                        text = "${vehicle.brand ?: ""} ${vehicle.model ?: ""}".trim().ifBlank { vehicle.category },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
+
                 // Status Badge
                 Surface(
                     modifier = Modifier.clip(RoundedCornerShape(12.dp)),
-                    color = if (vehicle.status == "ACTIVE") 
-                        MaterialTheme.colorScheme.tertiaryContainer 
-                    else 
+                    color = if (vehicle.status == "ACTIVE")
+                        MaterialTheme.colorScheme.tertiaryContainer
+                    else
                         MaterialTheme.colorScheme.errorContainer
                 ) {
                     Text(
                         text = vehicle.status,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (vehicle.status == "ACTIVE") 
-                            MaterialTheme.colorScheme.onTertiaryContainer 
-                        else 
+                        color = if (vehicle.status == "ACTIVE")
+                            MaterialTheme.colorScheme.onTertiaryContainer
+                        else
                             MaterialTheme.colorScheme.onErrorContainer
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Vehicle Details Grid
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -892,17 +871,17 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                     VehicleInfoItem(
                         icon = Icons.Default.Badge,
                         label = "Immatriculation",
-                        value = vehicle.registration,
+                        value = vehicle.registrationNumber,
                         modifier = Modifier.weight(1f)
                     )
                     VehicleInfoItem(
                         icon = Icons.Default.Info,
-                        label = "Type",
-                        value = vehicle.type,
+                        label = "Catégorie",
+                        value = vehicle.category,
                         modifier = Modifier.weight(1f)
                     )
                 }
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -914,14 +893,14 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                         modifier = Modifier.weight(1f)
                     )
                     VehicleInfoItem(
-                        icon = Icons.Default.Speed,
-                        label = "Statut",
-                        value = vehicle.status,
+                        icon = Icons.Default.LocalGasStation,
+                        label = "Carburant",
+                        value = vehicle.fuelType,
                         modifier = Modifier.weight(1f)
                     )
                 }
-                
-                // Capacity Section with upgraded progress bars
+
+                // Equipment Features
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -930,35 +909,126 @@ fun VehicleInfoCard(vehicle: VehicleInfo) {
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "Capacités",
+                            text = "Équipements",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        
-                        PremiumCapacityProgressBar(
-                            icon = Icons.Default.Inventory,
-                            label = "Poids",
-                            currentValue = "${vehicle.capacityWeight.toInt()} kg",
-                            maxValue = "${(vehicle.capacityWeight * 1.4).toInt()} kg",
-                            progress = 0.7f,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        
-                        PremiumCapacityProgressBar(
-                            icon = Icons.Default.Landscape,
-                            label = "Volume",
-                            currentValue = "${vehicle.capacityVolume.toInt()} m³",
-                            maxValue = "${(vehicle.capacityVolume * 1.5).toInt()} m³",
-                            progress = 0.5f,
-                            color = MaterialTheme.colorScheme.secondary
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            EquipmentChip(
+                                icon = Icons.Default.ArrowUpward,
+                                label = "Hayon élévateur",
+                                hasFeature = vehicle.hasLiftGate,
+                                modifier = Modifier.weight(1f)
+                            )
+                            EquipmentChip(
+                                icon = Icons.Default.AcUnit,
+                                label = "Réfrigération",
+                                hasFeature = vehicle.hasRefrigeration,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        EquipmentChip(
+                            icon = Icons.Default.LocationOn,
+                            label = "GPS",
+                            hasFeature = vehicle.hasGPS,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
+
+                // Capacity Section with upgraded progress bars
+                if (vehicle.capacityWeight != null || vehicle.capacityVolume != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = "Capacités",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            vehicle.capacityWeight?.let { weight ->
+                                PremiumCapacityProgressBar(
+                                    icon = Icons.Default.Inventory,
+                                    label = "Poids",
+                                    currentValue = "${weight.toInt()} kg",
+                                    maxValue = "${(weight * 1.4).toInt()} kg",
+                                    progress = 0.7f,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            vehicle.capacityVolume?.let { volume ->
+                                PremiumCapacityProgressBar(
+                                    icon = Icons.Default.Landscape,
+                                    label = "Volume",
+                                    currentValue = "${volume.toInt()} m³",
+                                    maxValue = "${(volume * 1.5).toInt()} m³",
+                                    progress = 0.5f,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+fun EquipmentChip(
+    icon: ImageVector,
+    label: String,
+    hasFeature: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = if (hasFeature)
+            MaterialTheme.colorScheme.primaryContainer
+        else
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (hasFeature)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (hasFeature)
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
         }
     }
 }
@@ -1105,7 +1175,7 @@ fun CapacityProgressBar(
 }
 
 @Composable
-fun DepotInfoCard(depot: DepotInfo) {
+fun AddressInfoCard(address: AddressInfo) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -1137,32 +1207,32 @@ fun DepotInfoCard(depot: DepotInfo) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Business,
+                        Icons.Default.Home,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(24.dp)
                     )
                 }
-                
+
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = "Dépôt d'Attachement",
+                        text = "Adresse Personnelle",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF102A43)
                     )
                     Text(
-                        text = depot.name,
+                        text = address.label,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Address Section
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -1185,19 +1255,24 @@ fun DepotInfoCard(depot: DepotInfo) {
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "Adresse",
+                            text = "Détails de l'adresse",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    
+
                     Column(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        depot.address?.let { address ->
+                        Text(
+                            text = address.address1,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        address.address2?.let { address2 ->
                             Text(
-                                text = address,
+                                text = address2,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -1206,48 +1281,44 @@ fun DepotInfoCard(depot: DepotInfo) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            depot.city?.let { city ->
-                                Text(
-                                    text = city,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            depot.postalCode?.let { postalCode ->
-                                Text(
-                                    text = postalCode,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = "${address.postalCode} ${address.city}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
+                        Text(
+                            text = address.country,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // Contact Info Grid
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                depot.phone?.let { phone ->
+                address.contactName?.let { contactName ->
                     ContactInfoCard(
-                        icon = Icons.Default.Phone,
-                        label = "Téléphone",
-                        value = phone,
+                        icon = Icons.Default.Person,
+                        label = "Contact",
+                        value = contactName,
                         modifier = Modifier.weight(1f),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                
-                depot.email?.let { email ->
+
+                address.contactPhone?.let { contactPhone ->
                     ContactInfoCard(
-                        icon = Icons.Default.Email,
-                        label = "Email",
-                        value = email,
+                        icon = Icons.Default.Phone,
+                        label = "Téléphone",
+                        value = contactPhone,
                         modifier = Modifier.weight(1f),
                         color = MaterialTheme.colorScheme.secondary
                     )

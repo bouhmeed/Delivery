@@ -740,7 +740,8 @@ fun TripDetailCardRedesigned(
     }
     
     val allCompleted = shipments.isNotEmpty() && shipments.all { 
-        it.status.uppercase() == "DELIVERED" || 
+        it.status.uppercase() == "LIVRE" || 
+        it.status.uppercase() == "DELIVERED" ||
         it.status.uppercase() == "COMPLETED"
     }
     
@@ -777,11 +778,13 @@ fun TripDetailCardRedesigned(
                 }
                 
                 // Redesigned Pill Badge using Figma theme colors
-                val (bgColor, textColor, label) = when (status) {
+                val (bgColor, textColor, label) = when (status?.uppercase()) {
                     "COMPLETED" -> Triple(FigmaGreen.copy(alpha = 0.1f), FigmaGreen, "Terminé")
                     "IN_PROGRESS" -> Triple(FigmaHeaderBlue.copy(alpha = 0.1f), FigmaHeaderBlue, "En cours")
                     "READY" -> Triple(FigmaAmber.copy(alpha = 0.1f), FigmaAmber, "Prêt")
-                    else -> Triple(FigmaLightGrey, FigmaTextDark, status)
+                    "PLANNING" -> Triple(FigmaLightGrey, FigmaTextDark, "Planifié")
+                    "CANCELLED" -> Triple(FigmaRed.copy(alpha = 0.1f), FigmaRed, "Annulé")
+                    else -> Triple(FigmaLightGrey, FigmaTextDark, status ?: "Inconnu")
                 }
                 
                 Surface(
@@ -864,10 +867,12 @@ fun TripDetailCardRedesigned(
                 ) {
                     shipments.forEachIndexed { index, shipment ->
                         val isLast = index == shipments.size - 1
-                        val stopStatus = when (shipment.status) {
-                            "DELIVERED" -> "FINISHED"
-                            "IN_PROGRESS" -> "ACTIVE"
-                            else -> "PENDING"
+                        val stopStatus = when (shipment.status?.uppercase()) {
+                            "DELIVERED", "COMPLETED" -> "Livré"
+                            "EXPEDITION" -> "En livraison"
+                            "TO_PLAN" -> "À planifier"
+                            "CANCELLED" -> "Annulé"
+                            else -> shipment.status ?: "Inconnu"
                         }
                         
                         Row(

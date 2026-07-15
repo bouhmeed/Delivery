@@ -18,105 +18,114 @@ class DirectProfileRepository {
     suspend fun getDriverProfile(driverId: Int): Result<ProfileResponse> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "🔍 getDriverProfile: $driverId")
-            
+
             // 1. Fetch Driver
             val driverQuery = """
-                SELECT id, "licenseNumber", "licenseExpiry", "employmentType", 
-                       "contractHoursWeek", "homeDepotId", "tenantId", status, address,
-                       "assignedVehicle", city, country, "createdAt", "dateOfBirth",
-                       email, "hireDate", phone, "postalCode", salary, "updatedAt"
-                FROM "Driver" 
+                SELECT id, "firstName", "lastName", phone, email, "licenseNumber",
+                       "licenseExpiry", "licenseIssueDate", "employmentType",
+                       "contractHoursWeek", status, "tenantId", "addressId",
+                       "dateOfBirth", "hireDate", "assignedVehicleId", "createdAt", "updatedAt"
+                FROM "Driver"
                 WHERE id = $driverId LIMIT 1
             """.trimIndent()
-            
+
             val driverRows = JSONObject(DatabaseManager.executeQuery(driverQuery)).optJSONArray("rows")
             if (driverRows == null || driverRows.length() == 0) {
                 return@withContext Result.failure(Exception("Driver not found"))
             }
             val dJson = driverRows.getJSONObject(0)
-            
+
             val profile = DriverProfile(
                 id = dJson.getInt("id"),
-                name = "Driver", // Default name since column doesn't exist
-                firstName = null,
-                lastName = null,
+                firstName = dJson.getString("firstName"),
+                lastName = dJson.getString("lastName"),
+                phone = getNullableString(dJson, "phone"),
+                email = getNullableString(dJson, "email"),
                 licenseNumber = getNullableString(dJson, "licenseNumber"),
                 licenseExpiry = getNullableString(dJson, "licenseExpiry"),
+                licenseIssueDate = getNullableString(dJson, "licenseIssueDate"),
                 employmentType = dJson.optString("employmentType", "FULL_TIME"),
                 contractHoursWeek = dJson.optInt("contractHoursWeek", 40),
-                homeDepotId = dJson.optInt("homeDepotId", 0),
-                tenantId = dJson.optInt("tenantId", 0),
                 status = dJson.optString("status", "ACTIF"),
-                address = getNullableString(dJson, "address"),
-                assignedVehicle = getNullableString(dJson, "assignedVehicle"),
-                city = getNullableString(dJson, "city"),
-                country = getNullableString(dJson, "country"),
+                tenantId = dJson.optInt("tenantId", 0),
+                addressId = if (!dJson.isNull("addressId")) dJson.getInt("addressId") else null,
                 dateOfBirth = getNullableString(dJson, "dateOfBirth"),
-                email = getNullableString(dJson, "email"),
                 hireDate = getNullableString(dJson, "hireDate"),
-                phone = getNullableString(dJson, "phone"),
-                postalCode = getNullableString(dJson, "postalCode"),
-                salary = dJson.optDouble("salary", 0.0),
+                assignedVehicleId = if (!dJson.isNull("assignedVehicleId")) dJson.getInt("assignedVehicleId") else null,
                 createdAt = dJson.optString("createdAt", ""),
                 updatedAt = dJson.optString("updatedAt", "")
             )
 
             // 2. Fetch Vehicle Info (if exists)
             var vehicleInfo: VehicleInfo? = null
-            val vehicleQuery = """
-                SELECT id, name, registration, "capacityWeight", "capacityVolume", type, 
-                       EXTRACT(YEAR FROM "createdAt")::int as year, status 
-                FROM "Vehicle" 
-                WHERE "driverId" = $driverId LIMIT 1
-            """.trimIndent()
-            try {
-                val vehicleRows = JSONObject(DatabaseManager.executeQuery(vehicleQuery)).optJSONArray("rows")
-                if (vehicleRows != null && vehicleRows.length() > 0) {
-                    val vJson = vehicleRows.getJSONObject(0)
-                    vehicleInfo = VehicleInfo(
-                        id = vJson.getInt("id"),
-                        name = vJson.getString("name"),
-                        registration = vJson.getString("registration"),
-                        capacityWeight = vJson.optDouble("capacityWeight", 0.0),
-                        capacityVolume = vJson.optDouble("capacityVolume", 0.0),
-                        type = vJson.optString("type", "CAMION"),
-                        year = vJson.optInt("year", 2024),
-                        status = vJson.optString("status", "ACTIVE")
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching vehicle details: ${e.message}")
-            }
-
-            // 3. Fetch Depot Info (using Location table)
-            var depotInfo: DepotInfo? = null
-            val homeDepotId = profile.homeDepotId
-            if (homeDepotId > 0) {
-                val depotQuery = """
-                    SELECT id, name, address, city, "postalCode", phone, email 
-                    FROM "Location" 
-                    WHERE id = $homeDepotId LIMIT 1
+            val assignedVehicleId = profile.assignedVehicleId
+            if (assignedVehicleId != null && assignedVehicleId > 0) {
+                val vehicleQuery = """
+                    SELECT v.id, vc.name as category_name, v."registrationNumber", v.brand, v.model,
+                           v."capacityWeight", v."capacityVolume", v.year, v.status, v."fuelType",
+                           v."hasLiftGate", v."hasRefrigeration", v."hasGPS"
+                    FROM "Vehicle" v
+                    LEFT JOIN "VehicleCategory" vc ON v."categoryId" = vc.id
+                    WHERE v.id = $assignedVehicleId LIMIT 1
                 """.trimIndent()
                 try {
-                    val depotRows = JSONObject(DatabaseManager.executeQuery(depotQuery)).optJSONArray("rows")
-                    if (depotRows != null && depotRows.length() > 0) {
-                        val depJson = depotRows.getJSONObject(0)
-                        depotInfo = DepotInfo(
-                            id = depJson.getInt("id"),
-                            name = depJson.getString("name"),
-                            address = getNullableString(depJson, "address"),
-                            city = getNullableString(depJson, "city"),
-                            postalCode = getNullableString(depJson, "postalCode"),
-                            phone = getNullableString(depJson, "phone"),
-                            email = getNullableString(depJson, "email")
+                    val vehicleRows = JSONObject(DatabaseManager.executeQuery(vehicleQuery)).optJSONArray("rows")
+                    if (vehicleRows != null && vehicleRows.length() > 0) {
+                        val vJson = vehicleRows.getJSONObject(0)
+                        vehicleInfo = VehicleInfo(
+                            id = vJson.getInt("id"),
+                            name = vJson.optString("category_name", "Non spécifié"),
+                            registrationNumber = vJson.getString("registrationNumber"),
+                            brand = getNullableString(vJson, "brand"),
+                            model = getNullableString(vJson, "model"),
+                            category = vJson.optString("category_name", "Non spécifié"),
+                            year = vJson.optInt("year", 2023),
+                            capacityWeight = if (!vJson.isNull("capacityWeight")) vJson.optDouble("capacityWeight") else null,
+                            capacityVolume = if (!vJson.isNull("capacityVolume")) vJson.optDouble("capacityVolume") else null,
+                            status = vJson.optString("status", "ACTIVE"),
+                            fuelType = vJson.optString("fuelType", "DIESEL"),
+                            hasLiftGate = vJson.optBoolean("hasLiftGate", false),
+                            hasRefrigeration = vJson.optBoolean("hasRefrigeration", false),
+                            hasGPS = vJson.optBoolean("hasGPS", false)
                         )
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error fetching depot details: ${e.message}")
+                    Log.e(TAG, "Error fetching vehicle details: ${e.message}")
                 }
             }
 
-            Result.success(ProfileResponse(profile, vehicleInfo, depotInfo))
+            // 3. Fetch Address Info (using Address table)
+            var addressInfo: AddressInfo? = null
+            val addressId = profile.addressId
+            if (addressId != null && addressId > 0) {
+                val addressQuery = """
+                    SELECT id, label, "address1", "address2", city, "postalCode", country,
+                           "contactName", "contactPhone"
+                    FROM "Address"
+                    WHERE id = $addressId LIMIT 1
+                """.trimIndent()
+                try {
+                    val addressRows = JSONObject(DatabaseManager.executeQuery(addressQuery)).optJSONArray("rows")
+                    if (addressRows != null && addressRows.length() > 0) {
+                        val aJson = addressRows.getJSONObject(0)
+                        addressInfo = AddressInfo(
+                            id = aJson.getInt("id"),
+                            label = aJson.getString("label"),
+                            address1 = aJson.getString("address1"),
+                            address2 = getNullableString(aJson, "address2"),
+                            city = aJson.getString("city"),
+                            postalCode = aJson.getString("postalCode"),
+                            country = aJson.getString("country"),
+                            contactName = getNullableString(aJson, "contactName"),
+                            contactPhone = getNullableString(aJson, "contactPhone")
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error fetching address details: ${e.message}")
+                }
+            }
+
+            Result.success(ProfileResponse(profile, vehicleInfo, addressInfo))
         } catch (e: Exception) {
             Log.e(TAG, "Error in getDriverProfile", e)
             Result.failure(e)
@@ -129,29 +138,30 @@ class DirectProfileRepository {
 
             // Query total trips and completed trips
             val tripsQuery = """
-                SELECT 
+                SELECT
                     COUNT(*)::int as total_trips,
                     COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END)::int as completed_trips
                 FROM "Trip"
                 WHERE "driverId" = $driverId
             """.trimIndent()
-            
+
             val tripsRows = JSONObject(DatabaseManager.executeQuery(tripsQuery)).optJSONArray("rows")
             val totalTrips = tripsRows?.optJSONObject(0)?.optInt("total_trips", 0) ?: 0
             val completedTrips = tripsRows?.optJSONObject(0)?.optInt("completed_trips", 0) ?: 0
 
-            // Query shipments metrics
+            // Query shipments metrics - quantity and weight are now in ShipmentLine
             val shipmentsQuery = """
-                SELECT 
-                    COUNT(*)::int as total_shipments,
-                    COUNT(CASE WHEN status = 'DELIVERED' THEN 1 END)::int as delivered_shipments,
-                    COALESCE(SUM(quantity), 0)::float as total_qty,
-                    COALESCE(SUM(weight), 0)::float as total_weight,
-                    COALESCE(AVG(weight), 0)::float as avg_weight
-                FROM "Shipment"
-                WHERE "driverId" = $driverId
+                SELECT
+                    COUNT(DISTINCT s.id)::int as total_shipments,
+                    COUNT(DISTINCT CASE WHEN s.status = 'EXPEDITION' THEN s.id END)::int as delivered_shipments,
+                    COALESCE(SUM(sl.quantity), 0)::float as total_qty,
+                    COALESCE(SUM(sl.weight), 0)::float as total_weight,
+                    COALESCE(AVG(sl.weight), 0)::float as avg_weight
+                FROM "Shipment" s
+                LEFT JOIN "ShipmentLine" sl ON s.id = sl."shipmentId"
+                WHERE s."driverId" = $driverId
             """.trimIndent()
-            
+
             val shipmentsRows = JSONObject(DatabaseManager.executeQuery(shipmentsQuery)).optJSONArray("rows")
             val totalShipments = shipmentsRows?.optJSONObject(0)?.optInt("total_shipments", 0) ?: 0
             val deliveredShipments = shipmentsRows?.optJSONObject(0)?.optInt("delivered_shipments", 0) ?: 0
@@ -167,7 +177,7 @@ class DirectProfileRepository {
 
             // Get first and last trip dates
             val datesQuery = """
-                SELECT 
+                SELECT
                     MIN("tripDate") as first_date,
                     MAX("tripDate") as last_date
                 FROM "Trip"
@@ -206,34 +216,24 @@ class DirectProfileRepository {
 
     suspend fun updateDriverProfile(driverId: Int, profile: DriverProfile): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            // Combine firstName and lastName into name for database
-            val fullName = if (!profile.firstName.isNullOrBlank() && !profile.lastName.isNullOrBlank()) {
-                "${profile.firstName} ${profile.lastName}"
-            } else if (!profile.firstName.isNullOrBlank()) {
-                profile.firstName
-            } else if (!profile.lastName.isNullOrBlank()) {
-                profile.lastName
-            } else {
-                profile.name
-            }
-            
-            Log.d(TAG, "🔄 updateDriverProfile: driverId=$driverId, name=$fullName, phone=${profile.phone}, email=${profile.email}, address=${profile.address}")
-            
+            Log.d(TAG, "🔄 updateDriverProfile: driverId=$driverId, firstName=${profile.firstName}, lastName=${profile.lastName}, phone=${profile.phone}, email=${profile.email}")
+
             val updateQuery = """
                 UPDATE "Driver"
                 SET
-                    phone = ${if (profile.phone != null) "'${profile.phone}'" else "phone"},
-                    email = ${if (profile.email != null) "'${profile.email}'" else "email"},
-                    address = ${if (profile.address != null) "'${profile.address}'" else "address"},
+                    "firstName" = '${profile.firstName}',
+                    "lastName" = '${profile.lastName}',
+                    phone = ${if (profile.phone != null) "'${profile.phone}'" else "NULL"},
+                    email = ${if (profile.email != null) "'${profile.email}'" else "NULL"},
                     "updatedAt" = CURRENT_TIMESTAMP
                 WHERE id = $driverId
             """.trimIndent()
-            
+
             Log.d(TAG, "📝 SQL Query: $updateQuery")
-            
+
             val result = DatabaseManager.executeQuery(updateQuery)
             Log.d(TAG, "✅ Update result: $result")
-            
+
             Result.success(true)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error in updateDriverProfile", e)

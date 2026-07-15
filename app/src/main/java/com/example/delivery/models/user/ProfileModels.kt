@@ -2,26 +2,21 @@ package com.example.delivery.models.user
 
 data class DriverProfile(
     val id: Int,
-    val name: String,
-    val firstName: String?,
-    val lastName: String?,
+    val firstName: String,
+    val lastName: String,
+    val phone: String?,
+    val email: String?,
     val licenseNumber: String?,
     val licenseExpiry: String?,
+    val licenseIssueDate: String?,
     val employmentType: String,
     val contractHoursWeek: Int,
-    val homeDepotId: Int,
-    val tenantId: Int,
     val status: String,
-    val address: String?,
-    val assignedVehicle: String?,
-    val city: String?,
-    val country: String?,
+    val tenantId: Int,
+    val addressId: Int?,
     val dateOfBirth: String?,
-    val email: String?,
     val hireDate: String?,
-    val phone: String?,
-    val postalCode: String?,
-    val salary: Double,
+    val assignedVehicleId: Int?,
     val createdAt: String,
     val updatedAt: String
 )
@@ -43,12 +38,30 @@ data class DriverStatsSummary(
 data class VehicleInfo(
     val id: Int,
     val name: String,
-    val registration: String,
-    val capacityWeight: Double,
-    val capacityVolume: Double,
-    val type: String,
+    val registrationNumber: String,
+    val brand: String?,
+    val model: String?,
+    val category: String,
     val year: Int,
-    val status: String
+    val capacityWeight: Double?,
+    val capacityVolume: Double?,
+    val status: String,
+    val fuelType: String,
+    val hasLiftGate: Boolean,
+    val hasRefrigeration: Boolean,
+    val hasGPS: Boolean
+)
+
+data class AddressInfo(
+    val id: Int,
+    val label: String,
+    val address1: String,
+    val address2: String?,
+    val city: String,
+    val postalCode: String,
+    val country: String,
+    val contactName: String?,
+    val contactPhone: String?
 )
 
 data class DepotInfo(
@@ -64,5 +77,5 @@ data class DepotInfo(
 data class ProfileResponse(
     val profile: DriverProfile,
     val vehicle: VehicleInfo?,
-    val depot: DepotInfo?
+    val address: AddressInfo?
 )

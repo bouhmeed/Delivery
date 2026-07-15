@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.delivery.models.delivery.DeliveryItem
 import com.example.delivery.models.driver.Trip
 import com.example.delivery.models.delivery.TripWithDeliveries
+import com.example.delivery.models.delivery.MultipleTripsWithDeliveries
 import com.example.delivery.repository.delivery.DirectDeliveryTrackingRepository
 import com.example.delivery.repository.Result
 import com.example.delivery.repository.delivery.DirectShipmentRepository
@@ -35,6 +36,10 @@ class DeliveryTrackingViewModel : ViewModel() {
     // State for trip and deliveries
     private val _tripWithDeliveriesState = MutableStateFlow<TripWithDeliveriesState>(TripWithDeliveriesState.Loading)
     val tripWithDeliveriesState: StateFlow<TripWithDeliveriesState> = _tripWithDeliveriesState.asStateFlow()
+    
+    // State for multiple trips with deliveries
+    private val _multipleTripsState = MutableStateFlow<MultipleTripsState>(MultipleTripsState.Loading)
+    val multipleTripsState: StateFlow<MultipleTripsState> = _multipleTripsState.asStateFlow()
     
     // State for individual operations
     private val _operationState = MutableStateFlow<OperationState>(OperationState.Idle)
@@ -77,18 +82,52 @@ class DeliveryTrackingViewModel : ViewModel() {
      * Load trip for selected date
      */
     fun loadTripForDate(driverId: Int, date: LocalDate = _selectedDate.value) {
+        println("🔍 ViewModel: loadTripForDate called with driverId=$driverId, date=${date.format(dateFormatter)}")
         viewModelScope.launch {
             repository.getTripForDate(driverId, date.format(dateFormatter)).collect { result ->
+                println("🔍 ViewModel: Result received - ${result::class.simpleName}")
                 when (result) {
                     is Result.Loading -> {
+                        println("🔍 ViewModel: Setting state to Loading")
                         _tripWithDeliveriesState.value = TripWithDeliveriesState.Loading
                     }
                     is Result.Success -> {
+                        println("🔍 ViewModel: Success - trip=${result.data.trip}, deliveries count=${result.data.deliveries.size}")
                         _tripWithDeliveriesState.value = TripWithDeliveriesState.Success(result.data)
                         applyFilters(result.data.deliveries)
                     }
                     is Result.Error -> {
+                        println("🔍 ViewModel: Error - ${result.message}")
                         _tripWithDeliveriesState.value = TripWithDeliveriesState.Error(result.message)
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Load all trips for selected date (for multiple trips per day)
+     */
+    fun loadAllTripsForDate(driverId: Int, date: LocalDate = _selectedDate.value) {
+        println("🔍 ViewModel: loadAllTripsForDate called with driverId=$driverId, date=${date.format(dateFormatter)}")
+        viewModelScope.launch {
+            repository.getAllTripsForDate(driverId, date.format(dateFormatter)).collect { result ->
+                println("🔍 ViewModel: Result received - ${result::class.simpleName}")
+                when (result) {
+                    is Result.Loading -> {
+                        println("🔍 ViewModel: Setting multiple trips state to Loading")
+                        _multipleTripsState.value = MultipleTripsState.Loading
+                    }
+                    is Result.Success -> {
+                        println("🔍 ViewModel: Success - trips count=${result.data.trips.size}")
+                        _multipleTripsState.value = MultipleTripsState.Success(result.data)
+                        // Combine all deliveries from all trips for filtering
+                        val allDeliveries = result.data.trips.flatMap { it.deliveries }
+                        applyFilters(allDeliveries)
+                    }
+                    is Result.Error -> {
+                        println("🔍 ViewModel: Error - ${result.message}")
+                        _multipleTripsState.value = MultipleTripsState.Error(result.message)
                     }
                 }
             }
@@ -108,7 +147,7 @@ class DeliveryTrackingViewModel : ViewModel() {
     fun goToPreviousDay(driverId: Int) {
         val previousDate = _selectedDate.value.minusDays(1)
         _selectedDate.value = previousDate
-        loadTripForDate(driverId, previousDate)
+        loadAllTripsForDate(driverId, previousDate)
     }
     
     /**
@@ -117,7 +156,7 @@ class DeliveryTrackingViewModel : ViewModel() {
     fun goToNextDay(driverId: Int) {
         val nextDate = _selectedDate.value.plusDays(1)
         _selectedDate.value = nextDate
-        loadTripForDate(driverId, nextDate)
+        loadAllTripsForDate(driverId, nextDate)
     }
     
     /**
@@ -126,7 +165,7 @@ class DeliveryTrackingViewModel : ViewModel() {
     fun goToToday(driverId: Int) {
         val today = LocalDate.now()
         _selectedDate.value = today
-        loadTripForDate(driverId, today)
+        loadAllTripsForDate(driverId, today)
     }
     
     /**
@@ -135,18 +174,20 @@ class DeliveryTrackingViewModel : ViewModel() {
     fun refresh(driverId: Int) {
         _isRefreshing.value = true
         // Clear current state to force reload
-        _tripWithDeliveriesState.value = TripWithDeliveriesState.Loading
+        _multipleTripsState.value = MultipleTripsState.Loading
         _filteredDeliveries.value = emptyList()
         
         viewModelScope.launch {
-            repository.getTripForDate(driverId, _selectedDate.value.format(dateFormatter)).collect { result ->
+            repository.getAllTripsForDate(driverId, _selectedDate.value.format(dateFormatter)).collect { result ->
                 when (result) {
                     is Result.Success -> {
-                        _tripWithDeliveriesState.value = TripWithDeliveriesState.Success(result.data)
-                        applyFilters(result.data.deliveries)
+                        _multipleTripsState.value = MultipleTripsState.Success(result.data)
+                        // Combine all deliveries from all trips for filtering
+                        val allDeliveries = result.data.trips.flatMap { it.deliveries }
+                        applyFilters(allDeliveries)
                     }
                     is Result.Error -> {
-                        _tripWithDeliveriesState.value = TripWithDeliveriesState.Error(result.message)
+                        _multipleTripsState.value = MultipleTripsState.Error(result.message)
                     }
                     is Result.Loading -> {
                         // Don't change state to loading during refresh (already set above)
@@ -195,7 +236,7 @@ class DeliveryTrackingViewModel : ViewModel() {
                 println("🔄 ViewModel: Mise à jour statut livraison TSL=$tripShipmentLinkId -> $newStatus")
                 
                 // Validate status is allowed for Shipment
-                val allowedShipmentStatuses = listOf("TO_PLAN", "EXPEDITION", "DELIVERED")
+                val allowedShipmentStatuses = listOf("TO_PLAN", "EXPEDITION", "LIVRE")
                 if (newStatus !in allowedShipmentStatuses) {
                     println("❌ ViewModel: Statut Shipment invalide: $newStatus")
                     _operationState.value = OperationState.Error("Statut invalide: $newStatus")
@@ -220,8 +261,7 @@ class DeliveryTrackingViewModel : ViewModel() {
                         
                         _operationState.value = OperationState.Success(successMessage)
                         
-                        // Refresh data for current driver if driverId is provided
-                        driverId?.let { refresh(it) }
+                        // Note: Refresh is handled by UI layer via LaunchedEffect(operationState)
                     }
                     result.isFailure -> {
                         val exception = result.exceptionOrNull()
@@ -277,8 +317,8 @@ class DeliveryTrackingViewModel : ViewModel() {
      */
     private fun getDeliveryStats(deliveries: List<DeliveryItem>): DeliveryStats {
         val total = deliveries.size
-        // Completed = DELIVERED
-        val completed = deliveries.count { it.status == "DELIVERED" }
+        // Completed = LIVRE or DELIVERED (for backward compatibility)
+        val completed = deliveries.count { it.status == "LIVRE" || it.status == "DELIVERED" }
         // In progress = EXPEDITION
         val inProgress = deliveries.count { it.status == "EXPEDITION" }
         // Not started = TO_PLAN
@@ -408,9 +448,10 @@ class DeliveryTrackingViewModel : ViewModel() {
      * Reapply current filters to current deliveries
      */
     private fun reapplyFilters() {
-        tripWithDeliveriesState.value.let { state ->
-            if (state is TripWithDeliveriesState.Success) {
-                applyFilters(state.data.deliveries)
+        multipleTripsState.value.let { state ->
+            if (state is MultipleTripsState.Success) {
+                val allDeliveries = state.data.trips.flatMap { it.deliveries }
+                applyFilters(allDeliveries)
             }
         }
     }
@@ -484,6 +525,15 @@ sealed class TripWithDeliveriesState {
     data class Success(val data: TripWithDeliveries) : TripWithDeliveriesState()
     data class Error(val message: String) : TripWithDeliveriesState()
     object NoTripToday : TripWithDeliveriesState()
+}
+
+/**
+ * Sealed class for MultipleTripsWithDeliveries state
+ */
+sealed class MultipleTripsState {
+    object Loading : MultipleTripsState()
+    data class Success(val data: MultipleTripsWithDeliveries) : MultipleTripsState()
+    data class Error(val message: String) : MultipleTripsState()
 }
 
 /**

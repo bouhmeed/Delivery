@@ -17,7 +17,15 @@ class DirectDriverRepository {
         return try {
             Log.d(TAG, "🔍 Getting driver by ID: $driverId")
             
-            val jsonResponse = DatabaseManager.getDriverById(driverId.toInt())
+            val query = """
+                SELECT id, "firstName", "lastName", "licenseNumber", "licenseExpiry", "licenseIssueDate",
+                       "employmentType", "contractHoursWeek", "tenantId", "addressId", "dateOfBirth", "hireDate",
+                       "assignedVehicleId", status, phone, email, "createdAt", "updatedAt"
+                FROM "Driver" 
+                WHERE id = $driverId
+            """.trimIndent()
+            
+            val jsonResponse = DatabaseManager.executeQuery(query)
             Log.d(TAG, "📦 JSON Response: $jsonResponse")
             
             val jsonObject = JSONObject(jsonResponse)
@@ -26,26 +34,30 @@ class DirectDriverRepository {
             if (rows != null && rows.length() > 0) {
                 val driverJson = rows.getJSONObject(0)
                 
+                val firstName = driverJson.optString("firstName", "")
+                val lastName = driverJson.optString("lastName", "")
+                val driverName = if (firstName.isNotEmpty() && lastName.isNotEmpty()) {
+                    "$firstName $lastName"
+                } else {
+                    firstName.ifEmpty { lastName }.ifEmpty { "" }
+                }
+                
                 val driver = Driver(
                     id = driverJson.getInt("id").toString(),
-                    name = driverJson.getString("name"),
+                    name = driverName,
                     licenseNumber = driverJson.optString("licenseNumber", null as String?),
                     licenseExpiry = driverJson.optString("licenseExpiry", null as String?),
                     employmentType = driverJson.optString("employmentType", "FULL_TIME"),
                     contractHoursWeek = driverJson.optInt("contractHoursWeek", 40),
-                    homeDepotId = if (driverJson.has("homeDepotId") && !driverJson.isNull("homeDepotId")) {
-                        driverJson.getInt("homeDepotId").toString()
-                    } else {
-                        null
-                    },
+                    homeDepotId = null, // homeDepotId removed from new schema
                     tenantId = if (driverJson.has("tenantId") && !driverJson.isNull("tenantId")) {
                         driverJson.getInt("tenantId").toString()
                     } else {
                         null
                     },
                     status = driverJson.optString("status", "ACTIF"),
-                    address = driverJson.optString("address", null as String?),
-                    assignedVehicle = driverJson.optString("assignedVehicle", null as String?),
+                    address = driverJson.optString("addressId", null as String?), // Changed to addressId
+                    assignedVehicle = driverJson.optString("assignedVehicleId", null as String?), // Changed to assignedVehicleId
                     createdAt = driverJson.optString("createdAt", ""),
                     updatedAt = driverJson.optString("updatedAt", "")
                 )

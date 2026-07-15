@@ -68,7 +68,6 @@ class MainActivity : ComponentActivity() {
 
                         composable(Screen.Delivery.route) {
                             DeliveryTrackingScreenWithDetails(
-                                driverId = 5,
                                 navController = navController,
                                 onBackPressed = {
                                     navController.popBackStack()
@@ -91,7 +90,6 @@ class MainActivity : ComponentActivity() {
                         composable("delivery?date={date}") { backStackEntry ->
                             val date = backStackEntry.arguments?.getString("date")
                             DeliveryTrackingScreenWithDetails(
-                                driverId = 5,
                                 navController = navController,
                                 selectedDate = date,
                                 onNavigateToDelivery = { delivery ->

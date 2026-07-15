@@ -46,15 +46,18 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-import com.example.delivery.components.TodayTourCard
 import com.example.delivery.components.VehicleMaintenanceSection
+import com.example.delivery.components.delivery.SimpleTripCard
+import com.example.delivery.components.delivery.VehicleMaintenanceCard
+import com.example.delivery.viewmodel.delivery.SimpleTodayTripViewModel
+import com.example.delivery.viewmodel.delivery.SimpleTripState
+import com.example.delivery.viewmodel.delivery.VehicleMaintenanceViewModel
+import com.example.delivery.viewmodel.delivery.VehicleMaintenanceState
 import com.example.delivery.components.CommonTopAppBar
 import com.example.delivery.components.BottomNavigationBar
 import com.example.delivery.auth.AuthManager
 import com.example.delivery.viewmodel.home.HomeViewModel
 import com.example.delivery.viewmodel.home.HomeUiState
-import com.example.delivery.viewmodel.delivery.TodayTourViewModel
-import com.example.delivery.viewmodel.delivery.TodayTourState
 import com.airbnb.lottie.compose.*
 
 // ─────────────────────────────────────────────
@@ -91,21 +94,33 @@ fun HomeScreen(navController: NavController) {
     val homeViewModel: HomeViewModel = viewModel()
     val unreadCount by homeViewModel.unreadCount.collectAsStateWithLifecycle()
     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+    
+    val simpleTripViewModel: SimpleTodayTripViewModel = viewModel()
+    val tripState by simpleTripViewModel.state.collectAsStateWithLifecycle()
 
-    val todayTourViewModel: TodayTourViewModel = viewModel()
+    val vehicleMaintenanceViewModel: VehicleMaintenanceViewModel = viewModel()
+    val maintenanceState by vehicleMaintenanceViewModel.state.collectAsStateWithLifecycle()
 
-    // Liaison du driver ID
-    LaunchedEffect((uiState as? HomeUiState.Success)?.driverInfo?.id) {
-        val driverIdString = (uiState as? HomeUiState.Success)?.driverInfo?.id
-        driverIdString?.toIntOrNull()?.let { id ->
-            todayTourViewModel.setDriverId(id)
+    // Load trip info when driver is available
+    LaunchedEffect(uiState) {
+        android.util.Log.d("HomeScreen", "🔄 LaunchedEffect triggered - uiState: ${uiState::class.simpleName}")
+        if (uiState is HomeUiState.Success) {
+            val driverId = (uiState as HomeUiState.Success).driverInfo?.id?.toIntOrNull()
+            android.util.Log.d("HomeScreen", "✅ Success state - driverId: $driverId")
+            driverId?.let { 
+                android.util.Log.d("HomeScreen", "📞 Calling loadTripInfo with driverId: $it")
+                simpleTripViewModel.loadTripInfo(it)
+                android.util.Log.d("HomeScreen", "🔧 Calling loadMaintenanceInfo with driverId: $it")
+                vehicleMaintenanceViewModel.loadMaintenanceInfo(it)
+            } ?: android.util.Log.w("HomeScreen", "⚠️ driverId is null in Success state")
+        } else {
+            android.util.Log.d("HomeScreen", "⏳ Waiting for Success state, current: ${uiState::class.simpleName}")
         }
     }
 
-    val todayTourState by todayTourViewModel.todayTourState.collectAsStateWithLifecycle()
-
     // Chargement initial
     LaunchedEffect(userEmail) {
+        android.util.Log.d("HomeScreen", "🔄 Initial LaunchedEffect - userEmail: $userEmail")
         userEmail?.let { email ->
             homeViewModel.loadData(email)
             homeViewModel.loadUnreadCount()
@@ -239,492 +254,111 @@ fun HomeScreen(navController: NavController) {
             }
 
             // ───────────────────────────────────────────────
-            // ÉTATS : CHARGEMENT / ERREUR / SUCCÈS — nouveau style "moderne coloré"
-            // ───────────────────────────────────────────────
-            when (uiState) {
-                is HomeUiState.Loading -> {
-                    item {
+            // ── Vehicle Maintenance Card ──
+            item {
+                val currentMaintenanceState = maintenanceState
+                android.util.Log.d("HomeScreen", "🔧 Rendering maintenance state: ${currentMaintenanceState::class.simpleName}")
+                when (currentMaintenanceState) {
+                    is VehicleMaintenanceState.Loading -> {
+                        android.util.Log.d("HomeScreen", "⏳ Rendering Loading state")
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .height(200.dp)
-                                .shadow(10.dp, RoundedCornerShape(20.dp), spotColor = ShadowSoft)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(PureWhite),
+                                .padding(horizontal = 20.dp)
+                                .height(100.dp)
+                                .background(
+                                    color = Color(0xFFF5F5F5),
+                                    shape = RoundedCornerShape(16.dp)
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = AccentBlue, strokeWidth = 3.dp)
+                            CircularProgressIndicator(color = AccentBlue)
+                        }
+                    }
+                    is VehicleMaintenanceState.Success -> {
+                        android.util.Log.d("HomeScreen", "✅ Rendering Success state - hasMaintenance: ${currentMaintenanceState.maintenanceInfo.hasMaintenance}")
+                        VehicleMaintenanceCard(
+                            maintenanceInfo = currentMaintenanceState.maintenanceInfo,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
+                    is VehicleMaintenanceState.Error -> {
+                        android.util.Log.d("HomeScreen", "❌ Rendering Error state: ${currentMaintenanceState.message}")
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .height(100.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Erreur de chargement",
+                                    color = Color.Red,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
                     }
                 }
+            }
 
-                is HomeUiState.Error -> {
-                    val message = (uiState as HomeUiState.Error).message
-                    item {
+            // ───────────────────────────────────────────────
+            // ── Today's Trip Card ──
+            item {
+                val currentState = tripState
+                android.util.Log.d("HomeScreen", "🎨 Rendering trip state: ${currentState::class.simpleName}")
+                when (currentState) {
+                    is SimpleTripState.Loading -> {
+                        android.util.Log.d("HomeScreen", "⏳ Rendering Loading state")
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .shadow(10.dp, RoundedCornerShape(20.dp), spotColor = ShadowSoft)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(PureWhite)
+                                .padding(horizontal = 20.dp)
+                                .height(100.dp)
+                                .background(
+                                    color = Color(0xFFF5F5F5),
+                                    shape = RoundedCornerShape(16.dp)
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.padding(20.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .background(AccentRed.copy(alpha = 0.1f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.Error,
-                                        contentDescription = null,
-                                        tint = AccentRed,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Column {
-                                    Text(
-                                        "Erreur de chargement",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextDark
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        message,
-                                        fontSize = 13.sp,
-                                        color = TextMuted
-                                    )
-                                }
-                            }
+                            CircularProgressIndicator(color = AccentBlue)
                         }
                     }
-                }
-
-                is HomeUiState.Success -> {
-                    val data = uiState as HomeUiState.Success
-
-                    // ── Titre "Tournée en cours" — badge dégradé ──
-                    item {
-                        Row(
+                    is SimpleTripState.Success -> {
+                        android.util.Log.d("HomeScreen", "✅ Rendering Success state - hasTrip: ${currentState.tripInfo.hasTrip}")
+                        SimpleTripCard(
+                            tripInfo = currentState.tripInfo,
+                            navController = navController,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
+                    is SimpleTripState.Error -> {
+                        android.util.Log.d("HomeScreen", "❌ Rendering Error state: ${currentState.message}")
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 20.dp)
+                                .height(100.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
                         ) {
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(9.dp))
-                                            .background(AccentBlue.copy(alpha = 0.12f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Bolt,
-                                            contentDescription = null,
-                                            tint = AccentBlue,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    Text(
-                                        text = "Tournée en cours",
-                                        fontSize = 22.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextDark
-                                    )
-                                }
-                                Text(
-                                    text = "Aujourd'hui",
-                                    fontSize = 14.sp,
-                                    color = TextMuted,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(start = 40.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // ── Carte Tournée ──
-                    item {
-                        var isPressed by remember { mutableStateOf(false) }
-                        val composition by rememberLottieComposition(LottieCompositionSpec.Asset("Calender.json"))
-                        val progress by animateLottieCompositionAsState(
-                            composition = composition,
-                            iterations = LottieConstants.IterateForever,
-                            isPlaying = true
-                        )
-                        
-                        when (val state = todayTourState) {
-                            is TodayTourState.Loading -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                                        .animateContentSize()
-                                        .alpha(if (isPressed) 0.7f else 1f)
-                                        .clickable { isPressed = true }
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .height(120.dp)
-                                ) {
-                                    LottieAnimation(
-                                        composition = composition,
-                                        progress = { progress },
-                                        modifier = Modifier.matchParentSize()
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .background(
-                                                brush = Brush.verticalGradient(
-                                                    colors = listOf(
-                                                        AccentBlue.copy(alpha = 0.35f),
-                                                        AccentBlueDark.copy(alpha = 0.35f)
-                                                    )
-                                                )
-                                            )
-                                    )
-                                    Column(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .padding(20.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            color = PureWhite,
-                                            strokeWidth = 3.dp,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Text(
-                                            text = "Chargement de la tournée...",
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = PureWhite
-                                        )
-                                    }
-                                }
-                            }
-
-                            is TodayTourState.Success -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                                        .animateContentSize()
-                                        .clip(RoundedCornerShape(16.dp))
-                                ) {
-                                    LottieAnimation(
-                                        composition = composition,
-                                        progress = { progress },
-                                        modifier = Modifier.matchParentSize()
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .background(
-                                                brush = Brush.verticalGradient(
-                                                    colors = listOf(
-                                                        AccentBlue.copy(alpha = 0.35f),
-                                                        AccentBlueDark.copy(alpha = 0.35f)
-                                                    )
-                                                )
-                                            )
-                                    )
-                                    Column(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { navController.navigate("tournee") }
-                                                .alpha(if (isPressed) 0.7f else 1f)
-                                                .padding(vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Bolt,
-                                                    contentDescription = null,
-                                                    tint = PureWhite,
-                                                    modifier = Modifier.size(28.dp)
-                                                )
-                                                Text(
-                                                    text = "Tournée du jour",
-                                                    fontSize = 20.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = PureWhite
-                                                )
-                                            }
-                                            Text(
-                                                text = "En cours",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = PureWhite
-                                            )
-                                        }
-                                        TodayTourCard(
-                                            tourInfo   = state.tourInfo,
-                                            statistics = state.statistics,
-                                            navController = navController,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            onStartTour        = { navController.navigate("tournee") },
-                                            onViewDetails      = { navController.navigate("tournee") },
-                                            onCompleteShipment = { /* TODO */ }
-                                        )
-                                    }
-                                }
-                            }
-
-                            is TodayTourState.NoTour -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                                        .clickable { navController.navigate("tournee") }
-                                        .alpha(if (isPressed) 0.7f else 1f)
-                                        .animateContentSize()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .height(140.dp)
-                                ) {
-                                    LottieAnimation(
-                                        composition = composition,
-                                        progress = { progress },
-                                        modifier = Modifier.matchParentSize()
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .background(
-                                                brush = Brush.verticalGradient(
-                                                    colors = listOf(
-                                                        AccentBlue.copy(alpha = 0.35f),
-                                                        AccentBlueDark.copy(alpha = 0.35f)
-                                                    )
-                                                )
-                                            )
-                                    )
-                                    Column(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .padding(24.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.LocalShipping,
-                                            contentDescription = null,
-                                            tint = PureWhite,
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = "Aucune tournée planifiée",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = PureWhite
-                                        )
-                                        Text(
-                                            text = "Aucune livraison n'est prévue pour aujourd'hui",
-                                            fontSize = 14.sp,
-                                            color = PureWhite.copy(alpha = 0.9f)
-                                        )
-                                    }
-                                }
-                            }
-
-                            is TodayTourState.Error -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                                        .clickable { todayTourViewModel.refresh() }
-                                        .alpha(if (isPressed) 0.7f else 1f)
-                                        .animateContentSize()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .height(140.dp)
-                                ) {
-                                    LottieAnimation(
-                                        composition = composition,
-                                        progress = { progress },
-                                        modifier = Modifier.matchParentSize()
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .background(
-                                                brush = Brush.verticalGradient(
-                                                    colors = listOf(
-                                                        AccentRed.copy(alpha = 0.35f),
-                                                        AccentRed.copy(alpha = 0.35f)
-                                                    )
-                                                )
-                                            )
-                                    )
-                                    Column(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .padding(24.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Error,
-                                            contentDescription = null,
-                                            tint = PureWhite,
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = "Erreur de chargement",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = PureWhite
-                                        )
-                                        Text(
-                                            text = state.message,
-                                            fontSize = 14.sp,
-                                            color = PureWhite.copy(alpha = 0.9f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // ── Alerte maintenance ──
-                    if (data.maintenanceAlert != null) {
-                        item {
-                            var isPressed by remember { mutableStateOf(false) }
-                            val composition by rememberLottieComposition(LottieCompositionSpec.Asset("Gears Lottie Animation.json"))
-                            val progress by animateLottieCompositionAsState(
-                                composition = composition,
-                                iterations = LottieConstants.IterateForever,
-                                isPlaying = true
-                            )
-                            
                             Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                                    .animateContentSize()
-                                    .clickable { /* Navigate to maintenance details */ }
-                                    .alpha(if (isPressed) 0.7f else 1f)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .height(160.dp)
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
                             ) {
-                                LottieAnimation(
-                                    composition = composition,
-                                    progress = { progress },
-                                    modifier = Modifier.matchParentSize()
+                                Text(
+                                    text = "Erreur de chargement",
+                                    color = Color.Red,
+                                    fontSize = 14.sp
                                 )
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .background(
-                                            brush = Brush.verticalGradient(
-                                                colors = listOf(
-                                                    AccentBlue.copy(alpha = 0.35f),
-                                                    AccentBlueDark.copy(alpha = 0.35f)
-                                                )
-                                            )
-                                        )
-                                )
-                                Column(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .padding(20.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Warning,
-                                            contentDescription = "Warning",
-                                            tint = AccentBlue,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Maintenance ${data.maintenanceAlert.type}",
-                                                fontSize = 18.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = PureWhite
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "Urgent",
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = PureWhite
-                                            )
-                                        }
-                                    }
-                                    data.maintenanceAlert.vehicleName?.let { name ->
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                            modifier = Modifier.padding(start = 44.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.LocalShipping,
-                                                contentDescription = null,
-                                                tint = PureWhite.copy(alpha = 0.9f),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = "$name • ${data.maintenanceAlert.registration ?: ""}",
-                                                fontSize = 15.sp,
-                                                color = PureWhite.copy(alpha = 0.9f)
-                                            )
-                                        }
-                                    }
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        modifier = Modifier.padding(start = 44.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.CalendarToday,
-                                            contentDescription = null,
-                                            tint = PureWhite.copy(alpha = 0.9f),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            text = "Date : ${data.maintenanceAlert.nextDate ?: "Non définie"}",
-                                            fontSize = 15.sp,
-                                            color = PureWhite.copy(alpha = 0.9f)
-                                        )
-                                    }
-                                }
                             }
                         }
                     }
-
-
-                    item { Spacer(modifier = Modifier.height(20.dp)) }
                 }
             }
         }

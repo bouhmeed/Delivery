@@ -55,10 +55,10 @@ class DirectDeliveryValidationRepository {
                 DatabaseManager.executeQuery(insertProofQuery)
             }
 
-            // 3. Update Shipment status to DELIVERED
+            // 3. Update Shipment status to LIVRE
             val updateShipmentQuery = """
                 UPDATE "Shipment"
-                SET status = 'DELIVERED', "updatedAt" = CURRENT_TIMESTAMP
+                SET status = 'LIVRE', "updatedAt" = CURRENT_TIMESTAMP
                 WHERE id = $shipmentId
             """.trimIndent()
             DatabaseManager.executeQuery(updateShipmentQuery)
@@ -66,7 +66,7 @@ class DirectDeliveryValidationRepository {
             // 4. Update TripShipmentLink status
             val updateTripLinkQuery = """
                 UPDATE "TripShipmentLink"
-                SET status = 'LIVRE', "podDone" = true, "updatedAt" = CURRENT_TIMESTAMP
+                SET status = 'TERMINE', "podDone" = true, "updatedAt" = CURRENT_TIMESTAMP
                 WHERE "shipmentId" = $shipmentId
             """.trimIndent()
             DatabaseManager.executeQuery(updateTripLinkQuery)
@@ -106,46 +106,103 @@ class DirectDeliveryValidationRepository {
                 null
             }
 
-            // 2. Insert into ShipmentReturns table
-            val insertReturnQuery = """
-                INSERT INTO "ShipmentReturns" (
-                    shipmentid,
-                    tripshipmentlinkid,
-                    packagesrecovered,
-                    packagingrecovered,
-                    palettes,
-                    caisses,
-                    bouteilles,
-                    futs,
-                    autre,
-                    comment,
-                    proofimageurl,
-                    tenantid
-                ) VALUES (
-                    $shipmentId,
-                    ${tripShipmentLinkId ?: "NULL"},
-                    $packagesRecovered,
-                    $packagingRecovered,
-                    $palettes,
-                    $caisses,
-                    $bouteilles,
-                    $futs,
-                    $autre,
-                    '$escapedComment',
-                    '$escapedImage',
-                    1
-                ) RETURNING id
+            // 2. Check if return already exists for this shipment
+            val checkReturnQuery = """
+                SELECT id FROM "ShipmentReturns" WHERE "shipmentId" = $shipmentId LIMIT 1
             """.trimIndent()
-            
-            val returnResult = DatabaseManager.executeQuery(insertReturnQuery)
-            val returnRows = JSONObject(returnResult).optJSONArray("rows")
-            
-            if (returnRows == null || returnRows.length() == 0) {
-                return@withContext Result.error("Failed to create shipment return")
+            val checkReturnResult = DatabaseManager.executeQuery(checkReturnQuery)
+            val checkReturnRows = JSONObject(checkReturnResult).optJSONArray("rows")
+            val existingReturnId = if (checkReturnRows != null && checkReturnRows.length() > 0) {
+                checkReturnRows.getJSONObject(0).optInt("id")
+            } else {
+                null
             }
-            
-            val shipmentReturnId = returnRows.getJSONObject(0).getInt("id")
-            println("✅ ShipmentReturn created with ID: $shipmentReturnId")
+
+            val shipmentReturnId = if (existingReturnId != null) {
+                // Update existing return
+                val updateReturnQuery = """
+                    UPDATE "ShipmentReturns"
+                    SET
+                        "tripShipmentLinkId" = ${tripShipmentLinkId ?: "NULL"},
+                        "returnStatus" = 'PENDING',
+                        "returnDate" = CURRENT_TIMESTAMP,
+                        "updatedAt" = CURRENT_TIMESTAMP,
+                        "packagesrecovered" = ${if (packagesRecovered) 1 else 0},
+                        "packagingrecovered" = ${if (packagingRecovered) 1 else 0},
+                        "palettes" = $palettes,
+                        "caisses" = $caisses,
+                        "bouteilles" = $bouteilles,
+                        "futs" = $futs,
+                        "autre" = $autre,
+                        "comment" = '$escapedComment',
+                        "proofimageurl" = '$escapedImage'
+                    WHERE id = $existingReturnId
+                    RETURNING id
+                """.trimIndent()
+                
+                val updateResult = DatabaseManager.executeQuery(updateReturnQuery)
+                val updateRows = JSONObject(updateResult).optJSONArray("rows")
+                
+                if (updateRows == null || updateRows.length() == 0) {
+                    return@withContext Result.error("Failed to update shipment return")
+                }
+                
+                updateRows.getJSONObject(0).getInt("id").also {
+                    println("✅ ShipmentReturn updated with ID: $it")
+                }
+            } else {
+                // Insert new return
+                val insertReturnQuery = """
+                    INSERT INTO "ShipmentReturns" (
+                        "shipmentId",
+                        "tenantId",
+                        "tripShipmentLinkId",
+                        "returnStatus",
+                        "returnReason",
+                        "returnDate",
+                        "createdAt",
+                        "updatedAt",
+                        "packagesrecovered",
+                        "packagingrecovered",
+                        "palettes",
+                        "caisses",
+                        "bouteilles",
+                        "futs",
+                        "autre",
+                        "comment",
+                        "proofimageurl"
+                    ) VALUES (
+                        $shipmentId,
+                        1,
+                        ${tripShipmentLinkId ?: "NULL"},
+                        'PENDING',
+                        NULL,
+                        CURRENT_TIMESTAMP,
+                        CURRENT_TIMESTAMP,
+                        CURRENT_TIMESTAMP,
+                        ${if (packagesRecovered) 1 else 0},
+                        ${if (packagingRecovered) 1 else 0},
+                        $palettes,
+                        $caisses,
+                        $bouteilles,
+                        $futs,
+                        $autre,
+                        '$escapedComment',
+                        '$escapedImage'
+                    ) RETURNING id
+                """.trimIndent()
+                
+                val returnResult = DatabaseManager.executeQuery(insertReturnQuery)
+                val returnRows = JSONObject(returnResult).optJSONArray("rows")
+                
+                if (returnRows == null || returnRows.length() == 0) {
+                    return@withContext Result.error("Failed to create shipment return")
+                }
+                
+                returnRows.getJSONObject(0).getInt("id").also {
+                    println("✅ ShipmentReturn created with ID: $it")
+                }
+            }
 
             // 2. Update TripShipmentLink to set returnsDone = true
             val updateTripLinkQuery = """
@@ -169,25 +226,30 @@ class DirectDeliveryValidationRepository {
         try {
             for (defect in defects) {
                 val escapedReason = defect.reason.replace("'", "''")
-                
+                val escapedDescription = defect.articleName.replace("'", "''")
+
                 val insertDefectQuery = """
                     INSERT INTO "ShipmentReturnDefects" (
-                        shipmentreturnid,
-                        itemid,
-                        quantity,
-                        reason
+                        "shipmentReturnId",
+                        "itemId",
+                        "defectType",
+                        "defectDescription",
+                        "quantity",
+                        "reason"
                     ) VALUES (
                         $shipmentReturnId,
                         ${defect.itemId},
+                        'OTHER',
+                        '$escapedDescription',
                         ${defect.quantity},
                         '$escapedReason'
                     )
                 """.trimIndent()
-                
+
                 DatabaseManager.executeQuery(insertDefectQuery)
                 println("✅ Defect inserted: Item ${defect.itemId} x${defect.quantity} - ${defect.reason}")
             }
-            
+
             Result.success(true)
         } catch (e: Exception) {
             e.printStackTrace()

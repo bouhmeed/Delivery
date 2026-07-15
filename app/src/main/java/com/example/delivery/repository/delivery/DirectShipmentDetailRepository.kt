@@ -33,69 +33,79 @@ class DirectShipmentDetailRepository {
             val sRow = shipmentJsonArray.getJSONObject(0)
             
             // 2. Get Client/Customer
-            val customerId = getNullableInt(sRow, "customerId")
+            val clientId = getNullableInt(sRow, "clientId")
             var customer: CustomerDetail? = null
-            if (customerId != null) {
+            if (clientId != null) {
                 val customerQuery = """
-                    SELECT id, name, address, city, "postalCode", phone, email, contact 
+                    SELECT id, name, "firstName", "companyName", phone, email 
                     FROM "Client" 
-                    WHERE id = $customerId LIMIT 1
+                    WHERE id = $clientId LIMIT 1
                 """.trimIndent()
                 val customerJson = JSONObject(DatabaseManager.executeQuery(customerQuery)).optJSONArray("rows")?.optJSONObject(0)
                 if (customerJson != null) {
+                    val name = getNullableString(customerJson, "name") ?: ""
+                    val firstName = getNullableString(customerJson, "firstName") ?: ""
+                    val companyName = getNullableString(customerJson, "companyName") ?: ""
+                    val displayName = if (name.isNotEmpty()) {
+                        name
+                    } else if (companyName.isNotEmpty()) {
+                        companyName
+                    } else if (firstName.isNotEmpty()) {
+                        firstName
+                    } else {
+                        ""
+                    }
                     customer = CustomerDetail(
                         id = customerJson.optInt("id"),
-                        name = getNullableString(customerJson, "name"),
-                        address = getNullableString(customerJson, "address"),
-                        city = getNullableString(customerJson, "city"),
-                        postalCode = getNullableString(customerJson, "postalCode"),
+                        name = displayName,
+                        address = null,
+                        city = null,
+                        postalCode = null,
                         phone = getNullableString(customerJson, "phone"),
                         email = getNullableString(customerJson, "email"),
-                        contact = getNullableString(customerJson, "contact")
+                        contact = null
                     )
                 }
             }
             
-            // 3. Get Origin Location
-            val originId = sRow.optInt("originId")
+            // 3. Get Origin Address via ShipmentAddress
             var origin: ShipmentLocationDetail? = null
-            if (originId > 0) {
-                val originQuery = """
-                    SELECT id, name, address, city, "postalCode" 
-                    FROM "Location" 
-                    WHERE id = $originId LIMIT 1
-                """.trimIndent()
-                val originJson = JSONObject(DatabaseManager.executeQuery(originQuery)).optJSONArray("rows")?.optJSONObject(0)
-                if (originJson != null) {
-                    origin = ShipmentLocationDetail(
-                        id = originJson.optInt("id"),
-                        name = getNullableString(originJson, "name"),
-                        address = getNullableString(originJson, "address"),
-                        city = getNullableString(originJson, "city"),
-                        postalCode = getNullableString(originJson, "postalCode")
-                    )
-                }
+            val originQuery = """
+                SELECT a.id, a.label as name, a."address1" as address, a.city, a."postalCode"
+                FROM "ShipmentAddress" sa
+                JOIN "Address" a ON sa."addressId" = a.id
+                WHERE sa."shipmentId" = $shipmentId AND sa.type = 'PICKUP'
+                LIMIT 1
+            """.trimIndent()
+            val originJson = JSONObject(DatabaseManager.executeQuery(originQuery)).optJSONArray("rows")?.optJSONObject(0)
+            if (originJson != null) {
+                origin = ShipmentLocationDetail(
+                    id = originJson.optInt("id"),
+                    name = getNullableString(originJson, "name"),
+                    address = getNullableString(originJson, "address"),
+                    city = getNullableString(originJson, "city"),
+                    postalCode = getNullableString(originJson, "postalCode")
+                )
             }
             
-            // 4. Get Destination Location
-            val destinationId = sRow.optInt("destinationId")
+            // 4. Get Destination Address via ShipmentAddress
             var destination: ShipmentLocationDetail? = null
-            if (destinationId > 0) {
-                val destQuery = """
-                    SELECT id, name, address, city, "postalCode" 
-                    FROM "Location" 
-                    WHERE id = $destinationId LIMIT 1
-                """.trimIndent()
-                val destJson = JSONObject(DatabaseManager.executeQuery(destQuery)).optJSONArray("rows")?.optJSONObject(0)
-                if (destJson != null) {
-                    destination = ShipmentLocationDetail(
-                        id = destJson.optInt("id"),
-                        name = getNullableString(destJson, "name"),
-                        address = getNullableString(destJson, "address"),
-                        city = getNullableString(destJson, "city"),
-                        postalCode = getNullableString(destJson, "postalCode")
-                    )
-                }
+            val destQuery = """
+                SELECT a.id, a.label as name, a."address1" as address, a.city, a."postalCode"
+                FROM "ShipmentAddress" sa
+                JOIN "Address" a ON sa."addressId" = a.id
+                WHERE sa."shipmentId" = $shipmentId AND sa.type = 'DELIVERY'
+                LIMIT 1
+            """.trimIndent()
+            val destJson = JSONObject(DatabaseManager.executeQuery(destQuery)).optJSONArray("rows")?.optJSONObject(0)
+            if (destJson != null) {
+                destination = ShipmentLocationDetail(
+                    id = destJson.optInt("id"),
+                    name = getNullableString(destJson, "name"),
+                    address = getNullableString(destJson, "address"),
+                    city = getNullableString(destJson, "city"),
+                    postalCode = getNullableString(destJson, "postalCode")
+                )
             }
             
             // 5. Get Driver Simple
@@ -103,13 +113,20 @@ class DirectShipmentDetailRepository {
             var driver: DriverSimple? = null
             if (driverId != null) {
                 val driverQuery = """
-                    SELECT id, name, phone FROM "Driver" WHERE id = $driverId LIMIT 1
+                    SELECT id, "firstName", "lastName", phone FROM "Driver" WHERE id = $driverId LIMIT 1
                 """.trimIndent()
                 val driverJson = JSONObject(DatabaseManager.executeQuery(driverQuery)).optJSONArray("rows")?.optJSONObject(0)
                 if (driverJson != null) {
+                    val firstName = getNullableString(driverJson, "firstName") ?: ""
+                    val lastName = getNullableString(driverJson, "lastName") ?: ""
+                    val driverName = if (firstName.isNotEmpty() && lastName.isNotEmpty()) {
+                        "$firstName $lastName"
+                    } else {
+                        firstName.ifEmpty { lastName }.ifEmpty { "" }
+                    }
                     driver = DriverSimple(
                         id = driverJson.optInt("id"),
-                        name = getNullableString(driverJson, "name"),
+                        name = driverName,
                         phone = getNullableString(driverJson, "phone")
                     )
                 }
@@ -120,14 +137,23 @@ class DirectShipmentDetailRepository {
             var vehicle: VehicleSimple? = null
             if (vehicleId != null) {
                 val vehicleQuery = """
-                    SELECT id, name, registration FROM "Vehicle" WHERE id = $vehicleId LIMIT 1
+                    SELECT id, brand, model, "registrationNumber" 
+                    FROM "Vehicle" 
+                    WHERE id = $vehicleId LIMIT 1
                 """.trimIndent()
                 val vehicleJson = JSONObject(DatabaseManager.executeQuery(vehicleQuery)).optJSONArray("rows")?.optJSONObject(0)
                 if (vehicleJson != null) {
+                    val brand = getNullableString(vehicleJson, "brand") ?: ""
+                    val model = getNullableString(vehicleJson, "model") ?: ""
+                    val vehicleName = if (brand.isNotEmpty() && model.isNotEmpty()) {
+                        "$brand $model"
+                    } else {
+                        brand.ifEmpty { model }.ifEmpty { "" }
+                    }
                     vehicle = VehicleSimple(
                         id = vehicleJson.optInt("id"),
-                        name = getNullableString(vehicleJson, "name"),
-                        registration = getNullableString(vehicleJson, "registration")
+                        name = vehicleName,
+                        registration = getNullableString(vehicleJson, "registrationNumber")
                     )
                 }
             }
@@ -135,7 +161,8 @@ class DirectShipmentDetailRepository {
             // 7. Get TripShipmentInfo
             var trip: TripShipmentInfo? = null
             val tripQuery = """
-                SELECT tsl.sequence, tsl.role, tsl.status as "linkStatus", tsl."podDone", tsl."returnsDone", t.id as "tripIdInt", t."tripId", t."tripDate", t.status as "tripStatus"
+                SELECT tsl.sequence, tsl.role, tsl.status as "linkStatus", tsl."podDone", tsl."returnsDone", 
+                       t.id as "tripIdInt", t."tripNumber", t."tripDate", t.status as "tripStatus"
                 FROM "TripShipmentLink" tsl
                 JOIN "Trip" t ON tsl."tripId" = t.id
                 WHERE tsl."shipmentId" = $shipmentId
@@ -145,7 +172,7 @@ class DirectShipmentDetailRepository {
             if (tripJson != null) {
                 trip = TripShipmentInfo(
                     id = tripJson.optInt("tripIdInt"),
-                    tripId = getNullableString(tripJson, "tripId"),
+                    tripId = getNullableString(tripJson, "tripNumber"),
                     tripDate = getNullableString(tripJson, "tripDate"),
                     status = getNullableString(tripJson, "tripStatus"),
                     sequence = getNullableInt(tripJson, "sequence"),
@@ -168,38 +195,28 @@ class DirectShipmentDetailRepository {
             val proofJson = JSONObject(DatabaseManager.executeQuery(proofQuery)).optJSONArray("rows")?.optJSONObject(0)
             if (proofJson != null) {
                 val proofId = proofJson.optInt("id")
+                val imageUrl = getNullableString(proofJson, "imageUrl")
+                val signatureUrl = getNullableString(proofJson, "signatureUrl")
+                val createdAt = getNullableString(proofJson, "createdAt")
+
                 deliveryProof = DeliveryProof(
                     id = proofId,
-                    imageUrl = getNullableString(proofJson, "imageUrl"),
-                    signatureUrl = getNullableString(proofJson, "signatureUrl"),
-                    createdAt = getNullableString(proofJson, "createdAt")
+                    imageUrl = imageUrl,
+                    signatureUrl = signatureUrl,
+                    createdAt = createdAt
                 )
-                
-                // 8.5. Get DeliveryImages linked to this proof
-                if (proofId > 0) {
-                    val imagesQuery = """
-                        SELECT id, "gedDocId", url, "documentType", "proofId", "createdAt"
-                        FROM "DeliveryImage" 
-                        WHERE "proofId" = '$proofId'
-                    """.trimIndent()
-                    val imagesJsonArray = JSONObject(DatabaseManager.executeQuery(imagesQuery)).optJSONArray("rows")
-                    if (imagesJsonArray != null && imagesJsonArray.length() > 0) {
-                        val imagesList = mutableListOf<DeliveryImage>()
-                        for (i in 0 until imagesJsonArray.length()) {
-                            val imgRow = imagesJsonArray.getJSONObject(i)
-                            imagesList.add(
-                                DeliveryImage(
-                                    id = getNullableString(imgRow, "id") ?: "",
-                                    gedDocId = getNullableString(imgRow, "gedDocId") ?: "",
-                                    url = getNullableString(imgRow, "url") ?: "",
-                                    documentType = getNullableString(imgRow, "documentType") ?: "PHOTO_DELIVERY",
-                                    proofId = getNullableString(imgRow, "proofId") ?: "",
-                                    createdAt = getNullableString(imgRow, "createdAt") ?: ""
-                                )
-                            )
-                        }
-                        deliveryImages = imagesList
-                    }
+
+                // Add the main proof image as a delivery image
+                if (!imageUrl.isNullOrEmpty()) {
+                    val proofImage = DeliveryImage(
+                        id = "proof_$proofId",
+                        gedDocId = "",
+                        url = imageUrl,
+                        documentType = "PROOF",
+                        proofId = proofId.toString(),
+                        createdAt = createdAt ?: ""
+                    )
+                    deliveryImages = listOf(proofImage)
                 }
             }
             
@@ -208,7 +225,7 @@ class DirectShipmentDetailRepository {
             val returnsQuery = """
                 SELECT "proofimageurl" 
                 FROM "ShipmentReturns" 
-                WHERE "shipmentid" = $shipmentId 
+                WHERE "shipmentId" = $shipmentId 
                 LIMIT 1
             """.trimIndent()
             val returnsJson = JSONObject(DatabaseManager.executeQuery(returnsQuery)).optJSONArray("rows")?.optJSONObject(0)
@@ -233,10 +250,10 @@ class DirectShipmentDetailRepository {
             val shipmentDetail = ShipmentDetailFull(
                 id = sRow.optInt("id"),
                 shipmentNo = getNullableString(sRow, "shipmentNo"),
-                customerId = customerId,
+                customerId = clientId,
                 type = sRow.optString("type", "OUTBOUND"),
-                originId = originId,
-                destinationId = destinationId,
+                originId = origin?.id ?: 0,
+                destinationId = destination?.id ?: 0,
                 priority = sRow.optString("priority", "NORMAL"),
                 requestedPickup = getNullableString(sRow, "requestedPickup"),
                 requestedDelivery = getNullableString(sRow, "requestedDelivery"),
@@ -250,10 +267,10 @@ class DirectShipmentDetailRepository {
                 stackable = if (sRow.isNull("stackable")) null else sRow.optBoolean("stackable"),
                 carrier = getNullableString(sRow, "carrier"),
                 trackingNumber = getNullableString(sRow, "trackingNumber"),
-                deliveryAddress = getNullableString(sRow, "deliveryAddress"),
-                deliveryCity = getNullableString(sRow, "deliveryCity"),
-                deliveryZipCode = getNullableString(sRow, "deliveryZipCode"),
-                deliveryCountry = sRow.optString("deliveryCountry", "France"),
+                deliveryAddress = destination?.address,
+                deliveryCity = destination?.city,
+                deliveryZipCode = destination?.postalCode,
+                deliveryCountry = "France",
                 driverId = driverId,
                 vehicleId = vehicleId,
                 estimatedDuration = getNullableInt(sRow, "estimatedDuration"),
@@ -298,10 +315,10 @@ class DirectShipmentDetailRepository {
     suspend fun completeShipment(shipmentId: Int): Result<String> = withContext(Dispatchers.IO) {
         try {
             val query = """
-                UPDATE "Shipment" SET status = 'DELIVERED', "updatedAt" = NOW() WHERE id = $shipmentId RETURNING id
+                UPDATE "Shipment" SET status = 'LIVRE', "updatedAt" = NOW() WHERE id = $shipmentId RETURNING id
             """.trimIndent()
             val query2 = """
-                UPDATE "TripShipmentLink" SET "podDone" = true, status = 'DELIVERED' WHERE "shipmentId" = $shipmentId RETURNING id
+                UPDATE "TripShipmentLink" SET "podDone" = true, status = 'TERMINE' WHERE "shipmentId" = $shipmentId RETURNING id
             """.trimIndent()
             DatabaseManager.executeQuery(query)
             DatabaseManager.executeQuery(query2)
@@ -313,7 +330,7 @@ class DirectShipmentDetailRepository {
 
     fun getDisplayStatus(shipment: ShipmentDetailFull): ShipmentDisplayStatus {
         return when {
-            shipment.status == "DELIVERED" -> ShipmentDisplayStatus.COMPLETED
+            shipment.status == "LIVRE" || shipment.status == "DELIVERED" -> ShipmentDisplayStatus.COMPLETED
             shipment.status == "EXPEDITION" -> ShipmentDisplayStatus.IN_PROGRESS
             shipment.status == "TO_PLAN" -> ShipmentDisplayStatus.NOT_STARTED
             else -> ShipmentDisplayStatus.NOT_STARTED

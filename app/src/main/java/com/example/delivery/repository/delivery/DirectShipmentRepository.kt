@@ -81,13 +81,13 @@ class DirectShipmentRepository {
         try {
             // Update Shipment table status
             val updateQuery = """
-                UPDATE "Shipment" SET status = 'DELIVERED', "updatedAt" = NOW() WHERE id = $shipmentId
+                UPDATE "Shipment" SET status = 'LIVRE', "updatedAt" = NOW() WHERE id = $shipmentId
             """.trimIndent()
             DatabaseManager.executeQuery(updateQuery)
             
             // Also update any TripShipmentLink matching this shipment
             val updateLinkQuery = """
-                UPDATE "TripShipmentLink" SET status = 'DELIVERED' WHERE "shipmentId" = $shipmentId
+                UPDATE "TripShipmentLink" SET status = 'TERMINE' WHERE "shipmentId" = $shipmentId
             """.trimIndent()
             DatabaseManager.executeQuery(updateLinkQuery)
             

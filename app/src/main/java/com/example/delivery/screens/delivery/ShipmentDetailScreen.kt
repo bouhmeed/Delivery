@@ -294,7 +294,7 @@ fun ShipmentDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (shipment.status != "DELIVERED") {
+                    if (shipment.status != "DELIVERED" && shipment.status != "LIVRE") {
                         Button(
                             onClick = onMarkAsDelivered,
                             modifier = Modifier.weight(1f),

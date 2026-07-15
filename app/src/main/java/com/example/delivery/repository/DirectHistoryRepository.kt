@@ -19,52 +19,63 @@ class DirectHistoryRepository {
         try {
             // Main query to get delivery history with all required joins
             val historyQuery = """
-                SELECT 
+                SELECT
                     t.id as trip_id,
-                    t."tripId" as trip_number,
+                    t."tripNumber" as trip_number,
                     t."tripDate" as trip_date,
                     t.status as trip_status,
                     s.id as shipment_id,
                     s."shipmentNo" as shipment_number,
                     s.status as shipment_status,
                     SUBSTRING(s.description, 1, 200) as shipment_description,
-                    s.quantity,
-                    s.uom,
+                    COALESCE(SUM(sl.quantity), 0) as quantity,
+                    COALESCE(MAX(sl.unit), 'PCS') as uom,
                     c.name as client_name,
-                    c.address as client_address,
-                    c.city as client_city,
-                    c."postalCode" as client_postal_code,
-                    origin_loc.name as origin_name,
-                    origin_loc.city as origin_city,
-                    origin_loc.address as origin_address,
-                    dest_loc.name as destination_name,
-                    dest_loc.city as destination_city,
-                    dest_loc.address as destination_address,
-                    v.name as vehicle_name,
-                    v.registration as vehicle_registration,
-                    v.type as vehicle_type,
+                    client_addr."address1" as client_address,
+                    client_addr.city as client_city,
+                    client_addr."postalCode" as client_postal_code,
+                    origin_addr.label as origin_name,
+                    origin_addr.city as origin_city,
+                    origin_addr."address1" as origin_address,
+                    dest_addr.label as destination_name,
+                    dest_addr.city as destination_city,
+                    dest_addr."address1" as destination_address,
+                    vc.name as vehicle_name,
+                    v."registrationNumber" as vehicle_registration,
+                    vc.code as vehicle_type,
                     tsl.status as link_status,
                     tsl."podDone" as pod_done,
                     tsl.sequence,
-                    d.name as driver_name
+                    CONCAT(d."firstName", ' ', d."lastName") as driver_name
                 FROM "Trip" t
                 JOIN "TripShipmentLink" tsl ON t.id = tsl."tripId"
                 JOIN "Shipment" s ON tsl."shipmentId" = s.id
-                LEFT JOIN "Client" c ON s."customerId" = c.id
-                LEFT JOIN "Location" origin_loc ON s."originId" = origin_loc.id
-                LEFT JOIN "Location" dest_loc ON s."destinationId" = dest_loc.id
+                LEFT JOIN "ShipmentLine" sl ON s.id = sl."shipmentId"
+                LEFT JOIN "Client" c ON s."clientId" = c.id
+                LEFT JOIN "ClientAddress" client_addr_link ON c.id = client_addr_link."clientId" AND client_addr_link."isDefault" = true
+                LEFT JOIN "Address" client_addr ON client_addr_link."addressId" = client_addr.id
+                LEFT JOIN "ShipmentAddress" origin_addr_link ON s.id = origin_addr_link."shipmentId" AND origin_addr_link.type = 'PICKUP'
+                LEFT JOIN "Address" origin_addr ON origin_addr_link."addressId" = origin_addr.id
+                LEFT JOIN "ShipmentAddress" dest_addr_link ON s.id = dest_addr_link."shipmentId" AND dest_addr_link.type = 'DELIVERY'
+                LEFT JOIN "Address" dest_addr ON dest_addr_link."addressId" = dest_addr.id
                 LEFT JOIN "Vehicle" v ON t."vehicleId" = v.id
+                LEFT JOIN "VehicleCategory" vc ON v."categoryId" = vc.id
                 LEFT JOIN "Driver" d ON t."driverId" = d.id
                 WHERE t."driverId" = ${driverId}
                   AND t."tripDate" <= CURRENT_DATE
-                  AND t.status = 'COMPLETED'
+                GROUP BY t.id, t."tripNumber", t."tripDate", t.status, s.id, s."shipmentNo", s.status, s.description,
+                         c.name, client_addr."address1", client_addr.city, client_addr."postalCode",
+                         origin_addr.label, origin_addr.city, origin_addr."address1",
+                         dest_addr.label, dest_addr.city, dest_addr."address1",
+                         vc.name, v."registrationNumber", vc.code,
+                         tsl.status, tsl."podDone", tsl.sequence, d."firstName", d."lastName"
                 ORDER BY t."tripDate" DESC, tsl.sequence ASC
                 LIMIT ${limit} OFFSET ${offset}
             """.trimIndent()
 
             val rowsArray = JSONObject(DatabaseManager.executeQuery(historyQuery)).optJSONArray("rows")
             val historyList = ArrayList<DeliveryHistoryItem>()
-            
+
             if (rowsArray != null) {
                 for (i in 0 until rowsArray.length()) {
                     val row = rowsArray.getJSONObject(i)
@@ -108,9 +119,8 @@ class DirectHistoryRepository {
                 FROM "Trip" t
                 WHERE t."driverId" = ${driverId}
                   AND t."tripDate" <= CURRENT_DATE
-                  AND t.status = 'COMPLETED'
             """.trimIndent()
-            
+
             val countArray = JSONObject(DatabaseManager.executeQuery(countQuery)).optJSONArray("rows")
             val totalCount = if (countArray != null && countArray.length() > 0) {
                 countArray.getJSONObject(0).optInt("total", 0)
@@ -135,22 +145,23 @@ class DirectHistoryRepository {
         try {
             // Get driver statistics
             val statsQuery = """
-                SELECT 
+                SELECT
                     COUNT(DISTINCT t.id) as total_trips,
                     COUNT(DISTINCT CASE WHEN t.status = 'COMPLETED' THEN t.id END) as completed_trips,
                     COUNT(DISTINCT s.id) as total_shipments,
-                    COUNT(DISTINCT CASE WHEN s.status = 'DELIVERED' THEN s.id END) as delivered_shipments,
+                    COUNT(DISTINCT CASE WHEN s.status = 'EXPEDITION' THEN s.id END) as delivered_shipments,
                     COUNT(DISTINCT CASE WHEN s.status = 'TO_PLAN' THEN s.id END) as pending_shipments,
                     COUNT(DISTINCT CASE WHEN s.status = 'EXPEDITION' THEN s.id END) as expedition_shipments,
-                    COALESCE(SUM(s.quantity), 0) as total_quantity,
-                    COALESCE(SUM(s.weight), 0) as total_weight,
-                    COALESCE(AVG(s.weight), 0) as avg_weight,
+                    COALESCE(SUM(sl.quantity), 0) as total_quantity,
+                    COALESCE(SUM(sl.weight), 0) as total_weight,
+                    COALESCE(AVG(sl.weight), 0) as avg_weight,
                     MAX(t."tripDate") as last_trip_date,
                     MIN(t."tripDate") as first_trip_date
                 FROM "Trip" t
                 LEFT JOIN "TripShipmentLink" tsl ON t.id = tsl."tripId"
                 LEFT JOIN "Shipment" s ON tsl."shipmentId" = s.id
-                WHERE t."driverId" = ${driverId} 
+                LEFT JOIN "ShipmentLine" sl ON s.id = sl."shipmentId"
+                WHERE t."driverId" = ${driverId}
                   AND t."tripDate" <= CURRENT_DATE
             """ .trimIndent()
 
@@ -195,22 +206,23 @@ class DirectHistoryRepository {
 
             // Get monthly trends for the last 6 months
             val trendsQuery = """
-                SELECT 
+                SELECT
                     TO_CHAR(t."tripDate", 'YYYY-MM') as month,
                     COUNT(DISTINCT t.id) as trips,
                     COUNT(DISTINCT s.id) as deliveries,
                     COUNT(DISTINCT CASE WHEN t.status = 'COMPLETED' THEN t.id END) as completed_trips,
-                    COUNT(DISTINCT CASE WHEN s.status = 'DELIVERED' THEN s.id END) as delivered_shipments,
-                    COALESCE(SUM(s.quantity), 0) as total_quantity,
-                    CASE 
-                      WHEN COUNT(DISTINCT s.id) > 0 
-                      THEN ROUND((COUNT(DISTINCT CASE WHEN s.status = 'DELIVERED' THEN s.id END) * 100.0 / COUNT(DISTINCT s.id)), 2)
-                      ELSE 0 
+                    COUNT(DISTINCT CASE WHEN s.status = 'EXPEDITION' THEN s.id END) as delivered_shipments,
+                    COALESCE(SUM(sl.quantity), 0) as total_quantity,
+                    CASE
+                      WHEN COUNT(DISTINCT s.id) > 0
+                      THEN ROUND((COUNT(DISTINCT CASE WHEN s.status = 'EXPEDITION' THEN s.id END) * 100.0 / COUNT(DISTINCT s.id)), 2)
+                      ELSE 0
                     END as success_rate
                 FROM "Trip" t
                 LEFT JOIN "TripShipmentLink" tsl ON t.id = tsl."tripId"
                 LEFT JOIN "Shipment" s ON tsl."shipmentId" = s.id
-                WHERE t."driverId" = ${driverId} 
+                LEFT JOIN "ShipmentLine" sl ON s.id = sl."shipmentId"
+                WHERE t."driverId" = ${driverId}
                   AND t."tripDate" <= CURRENT_DATE
                 GROUP BY TO_CHAR(t."tripDate", 'YYYY-MM')
                 ORDER BY month DESC

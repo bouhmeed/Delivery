@@ -85,7 +85,7 @@ class ShipmentDetailRepository {
      */
     fun getDisplayStatus(shipment: ShipmentDetailFull): ShipmentDisplayStatus {
         return when {
-            shipment.status == "DELIVERED" -> ShipmentDisplayStatus.COMPLETED
+            shipment.status == "LIVRE" || shipment.status == "DELIVERED" -> ShipmentDisplayStatus.COMPLETED
             shipment.status == "EXPEDITION" -> ShipmentDisplayStatus.IN_PROGRESS
             shipment.status == "TO_PLAN" -> ShipmentDisplayStatus.NOT_STARTED
             else -> ShipmentDisplayStatus.NOT_STARTED

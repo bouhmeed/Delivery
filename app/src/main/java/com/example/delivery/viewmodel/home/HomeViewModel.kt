@@ -49,7 +49,7 @@ class HomeViewModel : ViewModel() {
                     return@launch
                 }
                 val user = userResult.getOrNull()
-                Log.d("HomeViewModel", "User fetched: ${user?.id}")
+                Log.d("HomeViewModel", "User fetched: ${user?.id}, driverId: ${user?.driverId}")
 
                 var driver: Driver? = null
                 var vehicle: Vehicle? = null
@@ -58,15 +58,24 @@ class HomeViewModel : ViewModel() {
 
                 // 2️⃣ If user has driverId, fetch driver & vehicle
                 user?.driverId?.let { driverIdStr ->
+                    Log.d("HomeViewModel", "📞 User has driverId: $driverIdStr, fetching driver...")
                     try {
                         val driverId = driverIdStr.toInt()
                         val driverRepo = DirectDriverRepository()
                         val driverResult = driverRepo.getDriverById(driverIdStr)
-                        if (driverResult.isSuccess) driver = driverResult.getOrNull()
+                        if (driverResult.isSuccess) {
+                            driver = driverResult.getOrNull()
+                            Log.d("HomeViewModel", "✅ Driver fetched: ${driver?.id}")
+                        } else {
+                            Log.e("HomeViewModel", "❌ Failed to fetch driver: ${driverResult.exceptionOrNull()?.message}")
+                        }
                         // Vehicle
                         val vehicleRepo = DirectVehicleRepository()
                         val vehicleResult = vehicleRepo.getVehicleByDriverId(driverIdStr)
-                        if (vehicleResult.isSuccess) vehicle = vehicleResult.getOrNull()
+                        if (vehicleResult.isSuccess) {
+                            vehicle = vehicleResult.getOrNull()
+                            Log.d("HomeViewModel", "✅ Vehicle fetched: ${vehicle?.id}")
+                        }
                         // Maintenance
                         vehicle?.id?.let { vId ->
                             val maintResult = vehicleRepo.getVehicleMaintenance(vId.toString())
@@ -81,7 +90,7 @@ class HomeViewModel : ViewModel() {
                     } catch (e: NumberFormatException) {
                         Log.e("HomeViewModel", "Invalid driverId format: $driverIdStr", e)
                     }
-                }
+                } ?: Log.w("HomeViewModel", "⚠️ User does not have a driverId")
 
                 _uiState.value = HomeUiState.Success(
                     userInfo = user,

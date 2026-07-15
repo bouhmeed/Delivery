@@ -105,6 +105,12 @@ data class TripWithDeliveries(
     val date: String
 )
 
+// Multiple trips with their deliveries for a single day
+data class MultipleTripsWithDeliveries(
+    val trips: List<TripWithDeliveries>,
+    val date: String
+)
+
 // Today's Trip Response
 data class TodayTripResponse(
     val trip: Trip?,

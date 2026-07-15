@@ -1107,6 +1107,7 @@ fun TripHeaderCard(
 
 
 
+        it.status.uppercase() == "LIVRE" || 
         it.status.uppercase() == "DELIVERED" || 
 
 
@@ -1487,6 +1488,7 @@ fun TripProgressCard(
 
 
 
+        it.status.uppercase() == "LIVRE" || 
         it.status.uppercase() == "DELIVERED" || 
 
 

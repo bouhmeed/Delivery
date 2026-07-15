@@ -17,6 +17,13 @@ class BarcodeScannerViewModel(application: Application) : AndroidViewModel(appli
     private val context = getApplication<Application>().applicationContext
     private val shipmentRepository = ShipmentRepository()
     
+    // Driver ID (will be set dynamically)
+    private var currentDriverId: Int = 0
+    
+    fun setDriverId(driverId: Int) {
+        currentDriverId = driverId
+    }
+    
     val hasCameraPermission = mutableStateOf(
         ContextCompat.checkSelfPermission(
             context,
@@ -52,7 +59,7 @@ class BarcodeScannerViewModel(application: Application) : AndroidViewModel(appli
             scanResult.value = ScanResult.Loading
             
             try {
-                val result = shipmentRepository.searchShipment(barcode, driverId = 0)
+                val result = shipmentRepository.searchShipment(barcode, driverId = currentDriverId)
                 result.onSuccess { shipment ->
                     scanResult.value = ScanResult.Success(shipment)
                 }.onFailure { error ->

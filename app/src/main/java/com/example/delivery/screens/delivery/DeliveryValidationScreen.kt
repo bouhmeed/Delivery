@@ -95,7 +95,7 @@ fun DeliveryValidationScreen(
                         if (customerName != null) {
                             signerName = customerName
                             clientName = customerName
-                            println("🔍 DEBUG: Client name loaded: $customerName")
+                            println("🔍 DEBUG: Client name loaded for signer: $customerName")
                         }
                         
                         val existingSignature = shipment.deliveryProof?.signatureUrl

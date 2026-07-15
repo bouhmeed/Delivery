@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.example.delivery.auth.AuthManager
 import com.example.delivery.components.*
 import com.example.delivery.components.DeliveryItemCard
 import com.example.delivery.components.DeliveryStatsCard
@@ -44,9 +45,11 @@ import com.example.delivery.viewmodel.delivery.DeliveryTrackingViewModel
 import com.example.delivery.viewmodel.delivery.DeliveryStats
 import com.example.delivery.viewmodel.delivery.OperationState
 import com.example.delivery.viewmodel.delivery.TripWithDeliveriesState
+import com.example.delivery.viewmodel.delivery.MultipleTripsState
 import com.example.delivery.viewmodel.delivery.FilterState
 import com.example.delivery.viewmodel.delivery.SortOption
 import com.example.delivery.viewmodel.delivery.SortOrder
+import com.example.delivery.repository.user.DirectUserRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -75,7 +78,8 @@ fun DeliveryTrackingScreen(
     navController: NavController = rememberNavController(),
     viewModel: DeliveryTrackingViewModel = viewModel()
 ) {
-    val tripState by viewModel.tripWithDeliveriesState.collectAsState()
+    println("🔍 Screen: DeliveryTrackingScreen called with driverId=$driverId")
+    val multipleTripsState by viewModel.multipleTripsState.collectAsState()
     val operationState by viewModel.operationState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
@@ -169,6 +173,72 @@ fun DeliveryTrackingScreen(
                     "Navigation vers ${geocodedDeliveries.size} destinations (première affichée)",
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
+            }
+        }
+    }
+
+    // Fonction pour ouvrir TomTom avec navigation simple (comme le bouton "Naviguer")
+    fun openTomTomNavigationSimple(delivery: DeliveryItem) {
+        println("🗺️ BOUTON NAVIGUER CLIQUÉ!")
+        val address = delivery.deliveryAddress ?: delivery.fullAddress
+        val city = delivery.deliveryCity ?: delivery.locationCity
+        val zipCode = delivery.deliveryZipCode ?: delivery.locationPostalCode
+        println("🗺️ Adresse: $address, $city $zipCode")
+        
+        scope.launch {
+            try {
+                val fullAddress = "$address, $city $zipCode"
+                println("🌐 URL TomTom: $fullAddress")
+                
+                // Géocoder l'adresse pour obtenir les coordonnées
+                val geocodingService = com.example.delivery.services.TomTomGeocodingService()
+                val geocodedResult = withContext(Dispatchers.IO) {
+                    geocodingService.geocodeAddress(
+                        address = address,
+                        city = city,
+                        postalCode = zipCode,
+                        country = delivery.deliveryCountry ?: "France"
+                    )
+                }
+                
+                if (geocodedResult != null) {
+                    println("✅ Geocoded: ${geocodedResult.latitude}, ${geocodedResult.longitude}")
+                    
+                    // Check if TomTom app is installed
+                    val tomtomPackage = "com.tomtom.speedcams.android.map"
+                    val tomtomInstalled = try {
+                        context.packageManager.getPackageInfo(tomtomPackage, 0)
+                        true
+                    } catch (e: Exception) {
+                        false
+                    }
+
+                    if (tomtomInstalled) {
+                        println("✅ TomTom app installed, opening with coordinates")
+                        // Utiliser geo URI avec coordonnées et package TomTom
+                        val geoUri = "geo:${geocodedResult.latitude},${geocodedResult.longitude}?q=$fullAddress"
+                        val geoIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(geoUri))
+                        geoIntent.setPackage(tomtomPackage)
+                        context.startActivity(geoIntent)
+                    } else {
+                        println("❌ TomTom app not installed, opening with default map")
+                        // Ouvrir avec l'application de carte par défaut
+                        val geoUri = "geo:${geocodedResult.latitude},${geocodedResult.longitude}?q=$fullAddress"
+                        val geoIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(geoUri))
+                        context.startActivity(geoIntent)
+                    }
+                } else {
+                    println("❌ Geocoding failed")
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        android.widget.Toast.makeText(context, "Impossible de géocoder l'adresse", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ Erreur: ${e.message}")
+                e.printStackTrace()
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    android.widget.Toast.makeText(context, "Erreur lors de l'ouverture de TomTom", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -273,7 +343,7 @@ fun DeliveryTrackingScreen(
                         context,
                         "Origine introuvable pour tracer l'itinéraire",
                         android.widget.Toast.LENGTH_LONG
-                    ).show()
+                    )
                     return@launch
                 }
                 val startLat = String.format(java.util.Locale.US, "%.6f", start.first)
@@ -385,13 +455,14 @@ fun DeliveryTrackingScreen(
     val completionProgress = remember(filteredDeliveries) {
         if (filteredDeliveries.isEmpty()) 0f
         else {
-            val completed = filteredDeliveries.count { it.status == "DELIVERED" }
+            val completed = filteredDeliveries.count { it.status == "LIVRE" || it.status == "DELIVERED" }
             completed.toFloat() / filteredDeliveries.size.toFloat()
         }
     }
 
     LaunchedEffect(driverId, selectedDate) {
-        viewModel.loadTripForDate(driverId, selectedDate)
+        println("🔍 Screen: LaunchedEffect triggered - driverId=$driverId, selectedDate=$selectedDate")
+        viewModel.loadAllTripsForDate(driverId, selectedDate)
         viewModel.loadShipmentDates(driverId)
     }
 
@@ -473,9 +544,19 @@ fun DeliveryTrackingScreen(
                                 }
                                 IconButton(
                                     onClick = {
-                                        when (val state = tripState) {
-                                            is TripWithDeliveriesState.Success -> {
-                                                openTomTomMapsWithAllDeliveries(filteredDeliveries)
+                                        when (val state = multipleTripsState) {
+                                            is MultipleTripsState.Success -> {
+                                                // Naviguer vers la première livraison de la liste filtrée
+                                                val firstDelivery = filteredDeliveries.firstOrNull()
+                                                if (firstDelivery != null) {
+                                                    openTomTomNavigationSimple(firstDelivery)
+                                                } else {
+                                                    android.widget.Toast.makeText(
+                                                        context,
+                                                        "Aucune livraison à naviguer",
+                                                        android.widget.Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
                                             }
                                             else -> {
                                                 android.widget.Toast.makeText(
@@ -492,7 +573,7 @@ fun DeliveryTrackingScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Map,
-                                        contentDescription = "Voir carte TomTom",
+                                        contentDescription = "Naviguer",
                                         tint = PureWhite,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -548,7 +629,7 @@ fun DeliveryTrackingScreen(
                     val statusMapping = mapOf(
                         "Tout" to emptySet(),
                         "En expédition" to setOf("EXPEDITION"),
-                        "Livrée" to setOf("DELIVERED")
+                        "Livrée" to setOf("LIVRE", "DELIVERED")
                     )
                     statusOptions.forEach { status ->
                         val isSelected = when (status) {
@@ -616,13 +697,13 @@ fun DeliveryTrackingScreen(
                 )
             }
             // Content based on state
-            when (val state = tripState) {
-                is TripWithDeliveriesState.Loading -> {
+            when (val state = multipleTripsState) {
+                is MultipleTripsState.Loading -> {
                     item {
                         LoadingContent()
                     }
                 }
-                is TripWithDeliveriesState.Error -> {
+                is MultipleTripsState.Error -> {
                     item {
                         ErrorContent(
                             message = state.message,
@@ -630,47 +711,101 @@ fun DeliveryTrackingScreen(
                         )
                     }
                 }
-                is TripWithDeliveriesState.Success -> {
-                    if (state.data.trip == null) {
+                is MultipleTripsState.Success -> {
+                    if (state.data.trips.isEmpty()) {
                         item {
                             NoTripTodayContent(
                                 onRefresh = { viewModel.refresh(driverId) }
                             )
                         }
                     } else {
-                        // Stats card
+                        // Stats card for all trips
+                        val allDeliveries = state.data.trips.flatMap { it.deliveries }
                         item {
                             DeliveryStatsCard(
                                 stats = DeliveryStats(
-                                    total = filteredDeliveries.size,
-                                    completed = filteredDeliveries.count { it.status == "DELIVERED" },
-                                    inProgress = filteredDeliveries.count { it.status == "EXPEDITION" },
-                                    notStarted = filteredDeliveries.count { it.status == "TO_PLAN" },
-                                    completionPercentage = if (filteredDeliveries.isNotEmpty()) {
-                                        (filteredDeliveries.count { it.status == "DELIVERED" } * 100 / filteredDeliveries.size)
+                                    total = allDeliveries.size,
+                                    completed = allDeliveries.count { it.status == "LIVRE" || it.status == "DELIVERED" },
+                                    inProgress = allDeliveries.count { it.status == "EXPEDITION" },
+                                    notStarted = allDeliveries.count { it.status == "TO_PLAN" },
+                                    completionPercentage = if (allDeliveries.isNotEmpty()) {
+                                        (allDeliveries.count { it.status == "LIVRE" || it.status == "DELIVERED" } * 100 / allDeliveries.size)
                                     } else {
                                         0
                                     }
                                 )
                             )
                         }
-                        // Delivery items with origin information from backend
-                        items(filteredDeliveries, key = { it.shipmentId }) { delivery ->
-                            DeliveryItemCard(
-                                delivery = delivery,
-                                onItemClick = onNavigateToDelivery,
-                                onCompleteClick = { viewModel.completeDelivery(delivery.shipmentId) },
-                                onNavigateClick = onNavigateToMap,
-                                onValidationClick = onValidationClick,
-                                onCallClick = onCallClick,
-                                onStatusChange = { deliveryItem, newStatus ->
-                                    val tripShipmentLinkId = deliveryItem.tripShipmentLinkId ?: deliveryItem.shipmentId
-                                    viewModel.updateTripShipmentStatus(tripShipmentLinkId, newStatus, driverId)
-                                },
-                                onReturnsClick = { deliveryItem ->
-                                    navController.navigate("returns/${deliveryItem.shipmentId}")
+                        
+                        // Display each trip with its deliveries
+                        state.data.trips.forEach { tripWithDeliveries ->
+                            // Trip header card
+                            item {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                        .height(48.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color(0xFF102A43)
+                                    ),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal =12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Trajet: ${tripWithDeliveries.trip?.tripId ?: "N/A"}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "• ${getTripStatusText(tripWithDeliveries.trip?.status ?: "N/A")}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color.White.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                        Text(
+                                            text = "${tripWithDeliveries.deliveries.size}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
-                            )
+                            }
+                            
+                            // Deliveries for this trip (filtered)
+                            val filteredDeliveriesForTrip = tripWithDeliveries.deliveries.filter { delivery ->
+                                filteredDeliveries.any { it.shipmentId == delivery.shipmentId }
+                            }
+                            items(filteredDeliveriesForTrip, key = { it.shipmentId }) { delivery ->
+                                DeliveryItemCard(
+                                    delivery = delivery,
+                                    onItemClick = onNavigateToDelivery,
+                                    onCompleteClick = { viewModel.completeDelivery(delivery.shipmentId) },
+                                    onNavigateClick = onNavigateToMap,
+                                    onValidationClick = onValidationClick,
+                                    onCallClick = onCallClick,
+                                    onStatusChange = { deliveryItem, newStatus ->
+                                        val tripShipmentLinkId = deliveryItem.tripShipmentLinkId ?: deliveryItem.shipmentId
+                                        viewModel.updateTripShipmentStatus(tripShipmentLinkId, newStatus, driverId)
+                                    },
+                                    onReturnsClick = { deliveryItem ->
+                                        navController.navigate("returns/${deliveryItem.shipmentId}")
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -805,7 +940,6 @@ private fun NoTripTodayContent(
 
 @Composable
 fun DeliveryTrackingScreenWithDetails(
-    driverId: Int,
     onNavigateToDelivery: (DeliveryItem) -> Unit = {},
     onNavigateToMap: (DeliveryItem) -> Unit = {},
     onBackPressed: () -> Unit = {},
@@ -815,6 +949,34 @@ fun DeliveryTrackingScreenWithDetails(
     viewModel: DeliveryTrackingViewModel = viewModel(),
     selectedDate: String? = null
 ) {
+    val context = LocalContext.current
+    val authManager = remember { AuthManager(context) }
+    val userEmail = remember { authManager.getUserEmail() }
+    val userRepository = remember { DirectUserRepository() }
+    
+    // State for driverId
+    var driverId by remember { mutableIntStateOf(1) }
+    var isLoadingDriver by remember { mutableStateOf(true) }
+    
+    // Fetch driverId from logged-in user
+    LaunchedEffect(userEmail) {
+        userEmail?.let { email ->
+            isLoadingDriver = true
+            withContext(Dispatchers.IO) {
+                val userResult = userRepository.getUserByEmail(email)
+                if (userResult.isSuccess) {
+                    val user = userResult.getOrNull()
+                    val fetchedDriverId = user?.driverId?.toIntOrNull() ?: 1
+                    driverId = fetchedDriverId
+                    println("🔍 DeliveryTrackingScreenWithDetails: Fetched driverId=$driverId for user=$email")
+                } else {
+                    println("🔍 DeliveryTrackingScreenWithDetails: Failed to fetch user, using default driverId=1")
+                }
+                isLoadingDriver = false
+            }
+        }
+    }
+    
     // État pour gérer l'affichage des détails de livraison
     var showShipmentDetails by remember { mutableStateOf(false) }
     var selectedShipmentId by remember { mutableIntStateOf(0) }
@@ -844,49 +1006,60 @@ fun DeliveryTrackingScreenWithDetails(
         showDriverMap = true
         showDriverMap = true
     }
-    Box {
-        DeliveryTrackingScreen(
-            driverId = driverId,
-            onNavigateToDelivery = handleNavigateToDelivery,
-            onNavigateToMap = handleNavigateToMap,
-            onBackPressed = onBackPressed,
-            onValidationClick = onValidationClick,
-            onCallClick = onCallClick,
-            navController = navController,
-            viewModel = viewModel
-        )
-        // Afficher l'écran de détails de livraison si nécessaire
-        if (showShipmentDetails) {
-            NewShipmentDetailScreen(
-                shipmentId = selectedShipmentId,
+    
+    if (isLoadingDriver) {
+        // Show loading state while fetching driverId
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+    } else {
+        Box {
+            DeliveryTrackingScreen(
                 driverId = driverId,
-                onNavigateBack = {
-                    showShipmentDetails = false
-                    selectedShipmentId = 0
-                },
-                onNavigateToMap = { address ->
-                    // Utiliser la navigation interne avec la carte
-                    selectedDeliveryForNavigation?.let { delivery ->
-                        showDriverMap = true
-                    }
-                },
-                navController = navController
+                onNavigateToDelivery = handleNavigateToDelivery,
+                onNavigateToMap = handleNavigateToMap,
+                onBackPressed = onBackPressed,
+                onValidationClick = onValidationClick,
+                onCallClick = onCallClick,
+                navController = navController,
+                viewModel = viewModel
             )
+            // Afficher l'écran de détails de livraison si nécessaire
+            if (showShipmentDetails) {
+                NewShipmentDetailScreen(
+                    shipmentId = selectedShipmentId,
+                    driverId = driverId,
+                    onNavigateBack = {
+                        showShipmentDetails = false
+                        selectedShipmentId = 0
+                    },
+                    onNavigateToMap = { address ->
+                        // Utiliser la navigation interne avec la carte
+                        selectedDeliveryForNavigation?.let { delivery ->
+                            showDriverMap = true
+                        }
+                    },
+                    navController = navController
+                )
+            }
+            // Afficher l'écran de navigation interne si nécessaire
+            // DriverMapScreen disabled - using web navigation instead
+            /*
+            if (showDriverMap && selectedDeliveryForNavigation != null) {
+                DriverMapScreen(
+                    delivery = selectedDeliveryForNavigation!!,
+                    onBackPressed = {
+                        showDriverMap = false
+                        selectedDeliveryForNavigation = null
+                    },
+                    navController = navController
+                )
+            }
+            */
         }
-        // Afficher l'écran de navigation interne si nécessaire
-        // DriverMapScreen disabled - using web navigation instead
-        /*
-        if (showDriverMap && selectedDeliveryForNavigation != null) {
-            DriverMapScreen(
-                delivery = selectedDeliveryForNavigation!!,
-                onBackPressed = {
-                    showDriverMap = false
-                    selectedDeliveryForNavigation = null
-                },
-                navController = navController
-            )
-        }
-        */
     }
 }
 

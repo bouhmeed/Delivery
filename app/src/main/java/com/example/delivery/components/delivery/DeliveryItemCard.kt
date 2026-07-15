@@ -174,13 +174,13 @@ fun DeliveryItemCard(
 
 
 
-    // Status options: Shipment.status values (EXPEDITION, DELIVERED) - TO_PLAN hidden from UI
+    // Status options: Shipment.status values (EXPEDITION, LIVRE) - TO_PLAN hidden from UI
 
     // UI shows French labels but sends DB values directly
 
 
 
-    val statusOptions = listOf("EXPEDITION", "DELIVERED")
+    val statusOptions = listOf("EXPEDITION", "LIVRE")
 
 
 
@@ -192,7 +192,7 @@ fun DeliveryItemCard(
 
 
 
-            "DELIVERED" -> "DELIVERED"
+            "LIVRE", "DELIVERED" -> "LIVRE"
 
 
 
@@ -1550,7 +1550,7 @@ fun DeliveryItemCard(
 
 
 
-                                            "DELIVERED" -> "Livrée"
+                                            "LIVRE" -> "Livrée"
 
 
 
@@ -1814,7 +1814,7 @@ fun DeliveryItemCard(
 
                 // Deuxième ligne : Valider (seul, prend toute la largeur)
 
-                if (selectedStatus == "DELIVERED") {
+                if (selectedStatus == "LIVRE") {
 
                     Button(
 

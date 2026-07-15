@@ -24,8 +24,8 @@ class DirectVehicleRepository {
             Log.d(TAG, "🔍 Getting vehicle by ID: $vehicleId")
  
             val query = """
-                SELECT id, name, registration, "capacityWeight", "capacityVolume", 
-                       tenantId, "dernierControle", driverId, "prochainControle", 
+                SELECT id, brand, model, "registrationNumber", "capacityWeight", "capacityVolume", 
+                       tenantId, "technicalControlDate", driverId, "nextMaintenanceDate", 
                        status, type, "createdAt", "updatedAt"
                 FROM "Vehicle" 
                 WHERE id = $vehicleId
@@ -39,21 +39,29 @@ class DirectVehicleRepository {
  
             if (rows != null && rows.length() > 0) {
                 val vehicleJson = rows.getJSONObject(0)
+                
+                val brand = vehicleJson.optString("brand", "")
+                val model = vehicleJson.optString("model", "")
+                val vehicleName = if (brand.isNotEmpty() && model.isNotEmpty()) {
+                    "$brand $model"
+                } else {
+                    brand.ifEmpty { model }.ifEmpty { "Unknown" }
+                }
  
                 val vehicle = Vehicle(
                     id = vehicleJson.getInt("id").toString(),
-                    name = vehicleJson.getString("name"),
-                    registration = vehicleJson.getString("registration"),
+                    name = vehicleName,
+                    registration = vehicleJson.optString("registrationNumber", ""),
                     capacityWeight = vehicleJson.optInt("capacityWeight"),
                     capacityVolume = vehicleJson.optInt("capacityVolume"),
                     tenantId = vehicleJson.getInt("tenantId").toString(),
-                    dernierControle = vehicleJson.optString("dernierControle", null as String?),
+                    dernierControle = vehicleJson.optString("technicalControlDate", null as String?),
                     driverId = if (vehicleJson.has("driverId") && !vehicleJson.isNull("driverId")) {
                         vehicleJson.getInt("driverId").toString()
                     } else {
                         null
                     },
-                    prochainControle = vehicleJson.optString("prochainControle", null as String?),
+                    prochainControle = vehicleJson.optString("nextMaintenanceDate", null as String?),
                     status = vehicleJson.optString("status", "ACTIVE"),
                     type = vehicleJson.optString("type", "CAMION"),
                     createdAt = vehicleJson.optString("createdAt", null as String?),
@@ -79,7 +87,15 @@ class DirectVehicleRepository {
         return try {
             Log.d(TAG, "🔍 Getting vehicle by driver ID: $driverId")
  
-            val jsonResponse = DatabaseManager.getVehicleByDriverId(driverId.toInt())
+            val query = """
+                SELECT v.id, v.brand, v.model, v."registrationNumber", v."capacityWeight", v."capacityVolume", 
+                       v.tenantId, v."technicalControlDate", v.driverId, v."nextMaintenanceDate", 
+                       v.status, v.type, v."createdAt", v."updatedAt"
+                FROM "Vehicle" v
+                WHERE v.driverId = $driverId
+            """.trimIndent()
+            
+            val jsonResponse = DatabaseManager.executeQuery(query)
             Log.d(TAG, "📦 JSON Response: $jsonResponse")
  
             val jsonObject = JSONObject(jsonResponse)
@@ -87,21 +103,29 @@ class DirectVehicleRepository {
  
             if (rows != null && rows.length() > 0) {
                 val vehicleJson = rows.getJSONObject(0)
+                
+                val brand = vehicleJson.optString("brand", "")
+                val model = vehicleJson.optString("model", "")
+                val vehicleName = if (brand.isNotEmpty() && model.isNotEmpty()) {
+                    "$brand $model"
+                } else {
+                    brand.ifEmpty { model }.ifEmpty { "Unknown" }
+                }
  
                 val vehicle = Vehicle(
                     id = vehicleJson.getInt("id").toString(),
-                    name = vehicleJson.getString("name"),
-                    registration = vehicleJson.getString("registration"),
+                    name = vehicleName,
+                    registration = vehicleJson.optString("registrationNumber", ""),
                     capacityWeight = vehicleJson.optInt("capacityWeight"),
                     capacityVolume = vehicleJson.optInt("capacityVolume"),
                     tenantId = vehicleJson.getInt("tenantId").toString(),
-                    dernierControle = vehicleJson.optString("dernierControle", null as String?),
+                    dernierControle = vehicleJson.optString("technicalControlDate", null as String?),
                     driverId = if (vehicleJson.has("driverId") && !vehicleJson.isNull("driverId")) {
                         vehicleJson.getInt("driverId").toString()
                     } else {
                         null
                     },
-                    prochainControle = vehicleJson.optString("prochainControle", null as String?),
+                    prochainControle = vehicleJson.optString("nextMaintenanceDate", null as String?),
                     status = vehicleJson.optString("status", "ACTIVE"),
                     type = vehicleJson.optString("type", "CAMION"),
                     createdAt = vehicleJson.optString("createdAt", null as String?),
